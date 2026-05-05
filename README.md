@@ -13,7 +13,11 @@ python3 -m venv -venv
 ```
 . .venv/bin/activate
 ```
-3. Install Python Flask
+3. Install Python requirements
 ```
-pip install flask
+pip install -r requirements.txt
+```
+4. Init server
+```
+flask --app controller.controller run
 ```
