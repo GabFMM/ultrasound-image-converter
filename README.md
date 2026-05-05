@@ -5,7 +5,15 @@
 ```
 cd server-python
 ```
-1. init the environment
+1. Create the environment
+```
+python3 -m venv -venv
+```
+2. init the environment
 ```
 . .venv/bin/activate
+```
+3. Install Python Flask
+```
+pip install flask
 ```
