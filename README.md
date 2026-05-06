@@ -1,23 +1,84 @@
-# ultrasound-image-converter
+# Ultrasound Image Converter
 
-## How to execute Python server:
-1. Go to server-python directory
+## Requirements
+
+* Python 3.10+
+* Java 17+
+
+---
+
+## Running the Python Server
+
+1. Go to the directory:
+
 ```
 cd server-python
 ```
-1. Create the environment
+
+2. Create a virtual environment:
+
 ```
-python3 -m venv -venv
+python3 -m venv .venv
 ```
-2. init the environment
+
+3. Activate the environment:
+
+* Linux / WSL / Mac:
+
 ```
-. .venv/bin/activate
+source .venv/bin/activate
 ```
-3. Install Python requirements
+
+* Windows:
+
+```
+.venv\Scripts\activate
+```
+
+4. Install dependencies:
+
 ```
 pip install -r requirements.txt
 ```
-4. Init server
+
+5. Run the server:
+
 ```
 flask --app controller.controller run
 ```
+
+---
+
+## Running the Java Server
+
+### Option 1 — Run using Maven (recommended for development)
+
+```
+cd server-java
+./mvnw spring-boot:run
+```
+
+---
+
+### Option 2 — Run using the generated JAR
+
+1. Build the project:
+
+```
+cd server-java
+./mvnw clean package
+```
+
+2. Run the JAR:
+
+```
+java -jar target/converter-0.0.1-SNAPSHOT.jar
+```
+
+---
+
+## 🧠 Notes
+
+* Make sure `JAVA_HOME` is configured if using Maven
+* Always activate the Python virtual environment before running the server
+* Do not commit `.venv/` or `target/` directories
