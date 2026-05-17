@@ -5,8 +5,6 @@
 * Python 3.10+
 * Java 17+
 
----
-
 ## Running the Python Server
 
 1. Go to the directory:
@@ -47,8 +45,6 @@ pip install -r requirements.txt
 flask --app controller.controller run
 ```
 
----
-
 ## Running the Java Server
 
 ### Option 1 — Run using Maven (recommended for development)
@@ -57,8 +53,6 @@ flask --app controller.controller run
 cd server-java
 ./mvnw spring-boot:run
 ```
-
----
 
 ### Option 2 — Run using the generated JAR
 
@@ -75,10 +69,10 @@ cd server-java
 java -jar target/converter-0.0.1-SNAPSHOT.jar
 ```
 
----
 
-## 🧠 Notes
+## Notes
 
+* If you are going to use `git clone` command, you need to have Git LFS installed to obtain the CSV files
 * Make sure `JAVA_HOME` is configured if using Maven
 * Always activate the Python virtual environment before running the server
 * Do not commit `.venv/` or `target/` directories
