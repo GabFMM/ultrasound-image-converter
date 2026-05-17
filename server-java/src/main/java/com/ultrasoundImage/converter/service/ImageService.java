@@ -1,6 +1,7 @@
 package com.ultrasoundImage.converter.service;
 
 import com.ultrasoundImage.converter.util.Algorithm;
+import com.ultrasoundImage.converter.util.ProcessResult;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -60,7 +61,10 @@ public class ImageService {
         }
     }
     
-    public void process(Algorithm algorithm, InputStream input, OutputStream output) throws IOException {
+    public ProcessResult process(Algorithm algorithm, InputStream input, OutputStream output) throws IOException {
+        ProcessResult processResult = new ProcessResult();
+        processResult.setAlgorithm(algorithm);
+
         Path inputPath = null;
         Path outputPath = null;
 
@@ -80,5 +84,7 @@ public class ImageService {
             deleteTempFile(inputPath);
             deleteTempFile(outputPath);
         }
+
+        return processResult;
     }
 }
