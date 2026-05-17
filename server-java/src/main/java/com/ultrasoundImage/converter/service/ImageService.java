@@ -2,14 +2,18 @@ package com.ultrasoundImage.converter.service;
 
 import com.ultrasoundImage.converter.util.Algorithm;
 import com.ultrasoundImage.converter.util.ProcessResult;
+import org.jblas.DoubleMatrix;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.StringTokenizer;
 
 @Service
 public class ImageService {
@@ -27,12 +31,56 @@ public class ImageService {
             Files.deleteIfExists(path);
     }
 
+    // Possible improvement: return double[] to reduce memory cost
+    private double[][] readCSV(Path path) throws IOException {
+        // get number of lines
+        long numLines;
+        try (var lines = Files.lines(path)) {
+            numLines = lines.count();
+        }
+
+        // get number of columns
+        int numColumns = 0;
+
+        try(BufferedReader br = new BufferedReader(
+                new FileReader(path.toFile()),
+                64 * 1024 // 64 KB per chunk
+        )) {
+
+            String line = br.readLine();
+            StringTokenizer st = new StringTokenizer(line, ",");
+            while (st.hasMoreTokens()) {
+                numColumns++;
+                st.nextToken();
+            }
+
+            // create matrix
+            double[][] matrix = new double[(int) numLines][numColumns];
+            int i = 0;
+            int j = 0;
+
+            do {
+                st = new StringTokenizer(line, ",");
+                while (st.hasMoreTokens()) {
+                    String column = st.nextToken();
+                    matrix[i][j] = Double.parseDouble(column);
+                    j++;
+                }
+                j = 0;
+                i++;
+            }
+            while ((line = br.readLine()) != null);
+
+            return matrix;
+        }
+    }
+
     private Path signalGain(Path path){
 
     }
 
-    private Path CGNR(Path path){
-
+    private Path CGNR(Path path) throws IOException {
+        DoubleMatrix matrixH = new DoubleMatrix(readCSV(Path.of("data/h2.csv")));
     }
 
     private Path CGNE(Path path){
