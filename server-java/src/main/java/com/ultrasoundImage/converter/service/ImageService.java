@@ -83,8 +83,77 @@ public class ImageService {
         DoubleMatrix matrixH = new DoubleMatrix(readCSV(Path.of("data/h2.csv")));
     }
 
-    private Path CGNE(Path path){
+    private Path CGNE(Path signalPath) throws IOException {
+        // Carregar a Matriz de Modelo (H): lê arquivo CSV e converte para uma DoubleMatrix do jblas.
+        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h2.csv")));
+
+        // Carregar o Vetor de Sinal (g), assumindo que o sinal (output do signalGain) pode ser lido pelo readCSV.
+        DoubleMatrix g = new DoubleMatrix(readCSV(signalPath));
+
+        // Inicialização (Baseado nas três primeiras linhas da imagem)
+        DoubleMatrix f = DoubleMatrix.zeros(H.columns, 1); // f0 = 0
+        DoubleMatrix r = g.dup();                          // r0 = g - H*f0 (como f0 é 0, fica só g)
+        DoubleMatrix p = H.transpose().mmul(r);            // p0 = H^T * r0
+
+        // Configurações do loop
+        double tolerance = 1e-4; // Critério de parada (ajuste se necessário)
+        int maxIterations = 100; // Limite para não rodar infinitamente
         
+        // Guarda o (r^T * r) inicial para usar na primeira iteração
+        double rDotR = r.dot(r); 
+
+        // Loop "until convergence"
+        for (int i = 0; i < maxIterations; i++) {
+            
+            // alpha = (r_i^T * r_i) / (p_i^T * p_i)
+            double pDotP = p.dot(p);
+            double alpha = rDotR / pDotP;
+
+            // f_{i+1} = f_i + alpha * p_i
+            f.addi(p.mul(alpha));
+
+            // r_{i+1} = r_i - alpha * H * p_i
+            DoubleMatrix Hp = H.mmul(p);
+            r.subi(Hp.mul(alpha));
+
+            // Calcula o (r_{i+1}^T * r_{i+1}) da próxima iteração
+            double rNextDotRNext = r.dot(r);
+
+            // Verifica a convergência (se o erro for menor que a tolerância, o loop para)
+            if (Math.sqrt(rNextDotRNext) < tolerance) {
+                break;
+            }
+
+            // beta = (r_{i+1}^T * r_{i+1}) / (r_i^T * r_i)
+            double beta = rNextDotRNext / rDotR;
+
+            // p_{i+1} = H^T * r_{i+1} + beta * p_i
+            DoubleMatrix HTrNext = H.transpose().mmul(r);
+            p = HTrNext.add(p.mul(beta));
+
+            // Atualiza o rDotR para o próximo ciclo do loop
+            rDotR = rNextDotRNext;
+        }
+
+        // Salva o resultado (f) e retornar o Path
+        return saveMatrixToTempFile(f);
+    }
+
+    /**
+     * Método auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
+     * permitindo que o Controller envie via outputStream.
+     */
+    private Path saveMatrixToTempFile(DoubleMatrix matrix) throws IOException {
+        Path tempFile = Files.createTempFile("cgne-result-", ".bin");
+        
+        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(tempFile.toFile()))) {
+            // Escreve cada número da matriz como um dado binário (double - 8 bytes)
+            for (int i = 0; i < matrix.length; i++) {
+                dos.writeDouble(matrix.get(i));
+            }
+        }
+        
+        return tempFile;
     }
 
     private void toOutputStream(Path path, OutputStream outputStream) throws IOException{
