@@ -75,74 +75,118 @@ public class ImageService {
         }
     }
 
-    private Path signalGain(Path path){
+    private Path signalGain(Path inputPath) throws IOException {
+        // Arquivo temporário para salvar o sinal com ganho
+        Path outputPath = Files.createTempFile("signal-gain-", ".bin");
 
+        int N = 64;   // Número de elementos sensores (exemplo)
+        int S = 2048; // Número de amostras do sinal (exemplo)
+
+        // DataInputStream e DataOutputStream para ler e escrever números decimais de 8 bytes (double) direto do arquivo binário
+        try (DataInputStream dis = new DataInputStream(new FileInputStream(inputPath.toFile()));
+             DataOutputStream dos = new DataOutputStream(new FileOutputStream(outputPath.toFile()))) {
+
+            for (int c = 1; c <= N; c++) {
+                for (int l = 1; l <= S; l++) {
+                    try {
+                        // Lê o valor original da amostra no arquivo de entrada
+                        double gOriginal = dis.readDouble();
+                        // Aplica a fórmula: 100 + (1/20) * l * raiz(l)
+                        double gamma = 100.0 + (1.0 / 20.0) * l * Math.sqrt(l);
+                        // Multiplica o sinal original pelo ganho
+                        double gNovo = gOriginal * gamma;
+                        // Escreve o novo valor no arquivo de saída
+                        dos.writeDouble(gNovo);
+    
+                    } catch (EOFException e) {
+                        // Se o arquivo acabar antes do esperado pelo tamanho de N e S, interrompemos a leitura 
+                        break; 
+                    }
+                }
+            }
+        }
+        return outputPath; // Retorna o caminho do novo arquivo para o próximo passo (CGNE/CGNR)
     }
 
     private Path CGNR(Path path) throws IOException {
         DoubleMatrix matrixH = new DoubleMatrix(readCSV(Path.of("data/h2.csv")));
+        return path;
+    }
+
+
+    //Lê um arquivo binário de doubles e o converte para um array bidimensional (vetor coluna).
+    //Ideal para ler o resultado do signalGain.
+    private double[][] readBinaryVector(Path path) throws IOException {
+        // Descobre quantos números (doubles) existem no arquivo
+        // Cada double em Java ocupa 8 bytes
+        long fileSize = Files.size(path);
+        int numElements = (int) (fileSize / 8); 
+        
+        // Cria um vetor coluna (numElements linhas, 1 coluna)
+        double[][] matrix = new double[numElements][1]; 
+        
+        try (DataInputStream dis = new DataInputStream(new FileInputStream(path.toFile()))) {
+            for (int i = 0; i < numElements; i++) {
+                matrix[i][0] = dis.readDouble();
+            }
+        }
+        return matrix;
     }
 
     private Path CGNE(Path signalPath) throws IOException {
-        // Carregar a Matriz de Modelo (H): lê arquivo CSV e converte para uma DoubleMatrix do jblas.
+        // Carregar a Matriz de Modelo (H): usando o CSV original
         DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h2.csv")));
 
-        // Carregar o Vetor de Sinal (g), assumindo que o sinal (output do signalGain) pode ser lido pelo readCSV.
-        DoubleMatrix g = new DoubleMatrix(readCSV(signalPath));
+        // Carregar o Vetor de Sinal (g)
+        DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
 
-        // Inicialização (Baseado nas três primeiras linhas da imagem)
-        DoubleMatrix f = DoubleMatrix.zeros(H.columns, 1); // f0 = 0
-        DoubleMatrix r = g.dup();                          // r0 = g - H*f0 (como f0 é 0, fica só g)
-        DoubleMatrix p = H.transpose().mmul(r);            // p0 = H^T * r0
+        // Inicialização
+        DoubleMatrix f = DoubleMatrix.zeros(H.columns, 1); 
+        DoubleMatrix r = g.dup();                          
+        DoubleMatrix p = H.transpose().mmul(r);            
 
         // Configurações do loop
-        double tolerance = 1e-4; // Critério de parada (ajuste se necessário)
-        int maxIterations = 100; // Limite para não rodar infinitamente
+        double tolerance = 1e-4; 
+        int maxIterations = 100; 
         
-        // Guarda o (r^T * r) inicial para usar na primeira iteração
+        // Guarda o (r^T * r) inicial 
         double rDotR = r.dot(r); 
 
-        // Loop "until convergence"
         for (int i = 0; i < maxIterations; i++) {
-            
-            // alpha = (r_i^T * r_i) / (p_i^T * p_i)
             double pDotP = p.dot(p);
             double alpha = rDotR / pDotP;
-
             // f_{i+1} = f_i + alpha * p_i
             f.addi(p.mul(alpha));
-
             // r_{i+1} = r_i - alpha * H * p_i
             DoubleMatrix Hp = H.mmul(p);
             r.subi(Hp.mul(alpha));
-
-            // Calcula o (r_{i+1}^T * r_{i+1}) da próxima iteração
+            // Calcula o (r_{i+1}^T * r_{i+1})
             double rNextDotRNext = r.dot(r);
 
-            // Verifica a convergência (se o erro for menor que a tolerância, o loop para)
-            if (Math.sqrt(rNextDotRNext) < tolerance) {
+            // CÁLCULO DO ERRO: epsilon = ||r_{i+1}||_2 - ||r_i||_2
+            // A norma 2 (||x||_2) é a raiz quadrada do produto escalar (sqrt(x^T * x))
+            double normaRProximo = Math.sqrt(rNextDotRNext);
+            double normaRAtual = Math.sqrt(rDotR);
+            double epsilon = Math.abs(normaRProximo - normaRAtual); // Math.abs para garantir que a diferença seja positiva
+
+            // Verifica a convergência baseada no epsilon
+            if (epsilon < tolerance) {
                 break;
             }
 
             // beta = (r_{i+1}^T * r_{i+1}) / (r_i^T * r_i)
             double beta = rNextDotRNext / rDotR;
-
             // p_{i+1} = H^T * r_{i+1} + beta * p_i
             DoubleMatrix HTrNext = H.transpose().mmul(r);
             p = HTrNext.add(p.mul(beta));
-
-            // Atualiza o rDotR para o próximo ciclo do loop
+            // Atualiza o rDotR para a próxima iteração
             rDotR = rNextDotRNext;
         }
-
-        // Salva o resultado (f) e retornar o Path
         return saveMatrixToTempFile(f);
     }
 
-    /**
-     * Método auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
-     * permitindo que o Controller envie via outputStream.
-     */
+    //Método auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
+    //permitindo que o Controller envie via outputStream.
     private Path saveMatrixToTempFile(DoubleMatrix matrix) throws IOException {
         Path tempFile = Files.createTempFile("cgne-result-", ".bin");
         
@@ -151,8 +195,7 @@ public class ImageService {
             for (int i = 0; i < matrix.length; i++) {
                 dos.writeDouble(matrix.get(i));
             }
-        }
-        
+        } 
         return tempFile;
     }
 
@@ -183,25 +226,30 @@ public class ImageService {
         processResult.setAlgorithm(algorithm);
 
         Path inputPath = null;
-        Path outputPath = null;
+        Path signalPath = null;
+        Path finalOutputPath = null;
 
         try {
+            // Salva o arquivo de entrada recebido do cliente
             inputPath = createTempFile(input);
-            outputPath = signalGain(inputPath);
+            // Aplica o ganho de sinal (gera o primeiro arquivo temporário intermediário)
+            signalPath = signalGain(inputPath);
+            // Aplica o algoritmo de reconstrução (gera o arquivo temporário final)
+            if (algorithm == Algorithm.CGNE) {
+                finalOutputPath = CGNE(signalPath);
+            } else if(algorithm == Algorithm.CGNR) {
+                finalOutputPath = CGNR(signalPath);
+            }
 
-            if (algorithm == Algorithm.CGNE)
-                outputPath = CGNE(outputPath);
-            else if(algorithm == Algorithm.CGNR)
-                outputPath = CGNR(outputPath);
-
-            toOutputStream(outputPath, output);
-        }
-        // finally for errors (IOExceptions) or success
-        finally {
+            // Envia o resultado final para o cliente
+            toOutputStream(finalOutputPath, output);
+            
+        } finally {
+            // Limpa TODOS os rastros do disco do servidor
             deleteTempFile(inputPath);
-            deleteTempFile(outputPath);
+            deleteTempFile(signalPath);
+            deleteTempFile(finalOutputPath);
         }
-
         return processResult;
     }
 }
