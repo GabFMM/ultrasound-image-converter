@@ -1,22 +1,22 @@
 package com.ultrasoundImage.converter.service;
 
 import com.ultrasoundImage.converter.util.Algorithm;
+import com.ultrasoundImage.converter.util.IntWrapper;
 import com.ultrasoundImage.converter.util.ProcessResult;
 import org.jblas.DoubleMatrix;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.StringTokenizer;
 
 @Service
 public class ImageService {
+
+    private final double tolerance = 1e-4;
+    private final int maxIterations = 10;
 
     // There is no risk of races,
     // as createTempFile generates a single file per client.
@@ -108,9 +108,51 @@ public class ImageService {
         return outputPath; // Retorna o caminho do novo arquivo para o próximo passo (CGNE/CGNR)
     }
 
-    private Path CGNR(Path path) throws IOException {
-        DoubleMatrix matrixH = new DoubleMatrix(readCSV(Path.of("data/h2.csv")));
-        return path;
+    private Path CGNR(Path signalPath, IntWrapper intWrapper) throws IOException {
+        // Carregar a Matriz de Modelo (H): usando o CSV original
+        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h2.csv")));
+
+        // Carregar o Vetor de Sinal (g)
+        DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
+
+        // Inicialização
+        DoubleMatrix f = DoubleMatrix.zeros(H.columns, 1);
+        DoubleMatrix r = g.dup();
+        DoubleMatrix p = H.transpose().mmul(r);
+
+        for (int i = 0; i < maxIterations; i++) {
+            // usado para o ProcessResult
+            // i + 1 para trabalhar com números nesse intervalo: [1, maxIterations]
+            intWrapper.setNum(i + 1);
+
+            // pré-cálculo para evitar repetição
+            double r_dot_r = r.dot(r);
+
+            // Tirar a transposta para melhorar desempenho?
+            double alpha = r_dot_r / p.dot(p);
+
+            f = f.add(p.mul(alpha));
+
+            // mudar para H.mul(alpha).mmul(p)?
+            DoubleMatrix r2 = r.sub(H.mmul(p).mul(alpha));
+
+            // CÁLCULO DO ERRO: epsilon = ||r_{i+1}||_2 - ||r_i||_2
+            // A norma 2 (||x||_2) é a raiz quadrada do produto escalar (sqrt(x^T * x))
+            double normaR2 = Math.sqrt(r2.dot(r2));
+            double normaR = Math.sqrt(r_dot_r);
+            double epsilon = Math.abs(normaR2 - normaR);
+
+            if (epsilon < tolerance)
+                break;
+
+            double beta = (r2.transpose().dot(r2)) / r_dot_r;
+
+            r = r2;
+
+            p = H.transpose().mmul(r).add(p.mul(beta));
+        }
+
+        return saveMatrixToTempFile(f);
     }
 
 
@@ -133,7 +175,7 @@ public class ImageService {
         return matrix;
     }
 
-    private Path CGNE(Path signalPath) throws IOException {
+    private Path CGNE(Path signalPath, IntWrapper intWrapper) throws IOException {
         // Carregar a Matriz de Modelo (H): usando o CSV original
         DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h2.csv")));
 
@@ -143,16 +185,16 @@ public class ImageService {
         // Inicialização
         DoubleMatrix f = DoubleMatrix.zeros(H.columns, 1); 
         DoubleMatrix r = g.dup();                          
-        DoubleMatrix p = H.transpose().mmul(r);            
-
-        // Configurações do loop
-        double tolerance = 1e-4; 
-        int maxIterations = 100; 
+        DoubleMatrix p = H.transpose().mmul(r);
         
         // Guarda o (r^T * r) inicial 
         double rDotR = r.dot(r); 
 
         for (int i = 0; i < maxIterations; i++) {
+            // usado para o ProcessResult
+            // i + 1 para trabalhar com números nesse intervalo: [1, maxIterations]
+            intWrapper.setNum(i + 1);
+
             double pDotP = p.dot(p);
             double alpha = rDotR / pDotP;
             // f_{i+1} = f_i + alpha * p_i
@@ -185,7 +227,7 @@ public class ImageService {
         return saveMatrixToTempFile(f);
     }
 
-    //Método auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
+    //Metodo auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
     //permitindo que o Controller envie via outputStream.
     private Path saveMatrixToTempFile(DoubleMatrix matrix) throws IOException {
         Path tempFile = Files.createTempFile("cgne-result-", ".bin");
@@ -225,6 +267,8 @@ public class ImageService {
         ProcessResult processResult = new ProcessResult();
         processResult.setAlgorithm(algorithm);
 
+        IntWrapper intWrapper = new IntWrapper(-1);
+
         Path inputPath = null;
         Path signalPath = null;
         Path finalOutputPath = null;
@@ -236,10 +280,12 @@ public class ImageService {
             signalPath = signalGain(inputPath);
             // Aplica o algoritmo de reconstrução (gera o arquivo temporário final)
             if (algorithm == Algorithm.CGNE) {
-                finalOutputPath = CGNE(signalPath);
+                finalOutputPath = CGNE(signalPath, intWrapper);
             } else if(algorithm == Algorithm.CGNR) {
-                finalOutputPath = CGNR(signalPath);
+                finalOutputPath = CGNR(signalPath, intWrapper);
             }
+
+            processResult.setNumIterations(intWrapper.getNum());
 
             // Envia o resultado final para o cliente
             toOutputStream(finalOutputPath, output);

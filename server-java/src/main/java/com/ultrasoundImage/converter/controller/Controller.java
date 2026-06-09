@@ -52,7 +52,7 @@ public class Controller {
         );
 
         response.setHeader(
-                "start-time",
+                "end-time",
                 processResult.getEndDateTime().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"))
         );
 
