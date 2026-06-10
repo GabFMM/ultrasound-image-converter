@@ -110,7 +110,7 @@ public class ImageService {
 
     private Path CGNR(Path signalPath, IntWrapper intWrapper) throws IOException {
         // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h2.csv")));
+        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h1.csv")));
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
@@ -177,7 +177,7 @@ public class ImageService {
 
     private Path CGNE(Path signalPath, IntWrapper intWrapper) throws IOException {
         // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h2.csv")));
+        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h1.csv")));
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
