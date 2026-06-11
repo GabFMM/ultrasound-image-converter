@@ -5,12 +5,12 @@ import com.ultrasoundImage.converter.util.Algorithm;
 import com.ultrasoundImage.converter.util.ProcessResult;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.atomic.AtomicReference;
 
 @RestController
 @RequestMapping
@@ -35,10 +35,11 @@ public class Controller {
         );
         response.setContentType("application/octet-stream");
 
+        AtomicReference<Path> outputPath = new AtomicReference<>(null);
         ProcessResult processResult = imageService.process(
                 algorithm,
                 request.getInputStream(),
-                response.getOutputStream()
+                outputPath
         );
 
         response.setHeader(
@@ -70,5 +71,7 @@ public class Controller {
                 "num-iterations",
                 Integer.toString(processResult.getNumIterations())
         );
+
+        imageService.toOutputStream(outputPath.get(), response.getOutputStream());
     }
 }

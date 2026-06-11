@@ -10,13 +10,29 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.util.Random;
 import java.util.StringTokenizer;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class ImageService {
 
-    private final double tolerance = 1e-4;
-    private final int maxIterations = 10;
+    // Determina qual matriz modelo H usar
+    private final int numH;
+
+    // Usado no CGNE ou no CGNR
+    private final double tolerance;
+    private final int maxIterations;
+
+    public ImageService(){
+        Random random = new Random();
+        // numH eh igual a 1 ou 2
+        numH = random.nextInt(2) + 1;
+
+        tolerance = 1e-4;
+        maxIterations = 10;
+    }
 
     // There is no risk of races,
     // as createTempFile generates a single file per client.
@@ -76,11 +92,22 @@ public class ImageService {
     }
 
     private Path signalGain(Path inputPath) throws IOException {
+        System.out.println("Iniciado ganho de sinal");
+
         // Arquivo temporário para salvar o sinal com ganho
         Path outputPath = Files.createTempFile("signal-gain-", ".bin");
 
-        int N = 64;   // Número de elementos sensores (exemplo)
-        int S = 2048; // Número de amostras do sinal (exemplo)
+        int N = 0; // Número de elementos sensores
+        int S = 0;  // Número de amostras do sinal
+
+        if(numH == 1){
+            S = 794;
+            N = 64;
+        }
+        else if(numH == 2){
+            S = 436;
+            N = 64;
+        }
 
         // DataInputStream e DataOutputStream para ler e escrever números decimais de 8 bytes (double) direto do arquivo binário
         try (DataInputStream dis = new DataInputStream(new FileInputStream(inputPath.toFile()));
@@ -105,12 +132,17 @@ public class ImageService {
                 }
             }
         }
+
+        System.out.println("Feito ganho de sinal");
+
         return outputPath; // Retorna o caminho do novo arquivo para o próximo passo (CGNE/CGNR)
     }
 
     private Path CGNR(Path signalPath, IntWrapper intWrapper) throws IOException {
+        System.out.println("Iniciado CGNR");
+
         // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h1.csv")));
+        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
@@ -121,6 +153,7 @@ public class ImageService {
         DoubleMatrix p = H.transpose().mmul(r);
 
         for (int i = 0; i < maxIterations; i++) {
+            System.out.println("Iteração: " + (i + 1));
             // usado para o ProcessResult
             // i + 1 para trabalhar com números nesse intervalo: [1, maxIterations]
             intWrapper.setNum(i + 1);
@@ -128,7 +161,6 @@ public class ImageService {
             // pré-cálculo para evitar repetição
             double r_dot_r = r.dot(r);
 
-            // Tirar a transposta para melhorar desempenho?
             double alpha = r_dot_r / p.dot(p);
 
             f = f.add(p.mul(alpha));
@@ -152,12 +184,12 @@ public class ImageService {
             p = H.transpose().mmul(r).add(p.mul(beta));
         }
 
+        System.out.println("Feito CGNR");
         return saveMatrixToTempFile(f);
     }
 
-
-    //Lê um arquivo binário de doubles e o converte para um array bidimensional (vetor coluna).
-    //Ideal para ler o resultado do signalGain.
+    // Lê um arquivo binário de doubles e o converte para um array bidimensional (vetor coluna).
+    // Ideal para ler o resultado do signalGain.
     private double[][] readBinaryVector(Path path) throws IOException {
         // Descobre quantos números (doubles) existem no arquivo
         // Cada double em Java ocupa 8 bytes
@@ -176,8 +208,10 @@ public class ImageService {
     }
 
     private Path CGNE(Path signalPath, IntWrapper intWrapper) throws IOException {
+        System.out.println("Iniciado CGNE");
+
         // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h1.csv")));
+        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
@@ -191,6 +225,7 @@ public class ImageService {
         double rDotR = r.dot(r); 
 
         for (int i = 0; i < maxIterations; i++) {
+            System.out.println("Iteração: " + (i + 1));
             // usado para o ProcessResult
             // i + 1 para trabalhar com números nesse intervalo: [1, maxIterations]
             intWrapper.setNum(i + 1);
@@ -224,11 +259,13 @@ public class ImageService {
             // Atualiza o rDotR para a próxima iteração
             rDotR = rNextDotRNext;
         }
+
+        System.out.println("Feito CGNE");
         return saveMatrixToTempFile(f);
     }
 
-    //Metodo auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
-    //permitindo que o Controller envie via outputStream.
+    // Método auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
+    // permitindo que o Controller envie via outputStream.
     private Path saveMatrixToTempFile(DoubleMatrix matrix) throws IOException {
         Path tempFile = Files.createTempFile("cgne-result-", ".bin");
         
@@ -241,7 +278,10 @@ public class ImageService {
         return tempFile;
     }
 
-    private void toOutputStream(Path path, OutputStream outputStream) throws IOException{
+    public void toOutputStream(Path path, OutputStream outputStream) throws IOException{
+        if(path == null)
+            return;
+
         try(InputStream inputStream =
                     Files.newInputStream(path)) {
 
@@ -261,17 +301,34 @@ public class ImageService {
 
             outputStream.flush();
         }
+        finally {
+            deleteTempFile(path);
+        }
     }
     
-    public ProcessResult process(Algorithm algorithm, InputStream input, OutputStream output) throws IOException {
+    public ProcessResult process(
+            Algorithm algorithm,
+            InputStream input,
+            AtomicReference<Path> finalOutputPath
+    ) throws IOException {
         ProcessResult processResult = new ProcessResult();
+
         processResult.setAlgorithm(algorithm);
+        processResult.setStartDateTime(LocalDateTime.now());
+
+        if(numH == 1){
+            processResult.setWidthPixels(60);
+            processResult.setHeightPixels(60);
+        }
+        else if(numH == 2){
+            processResult.setWidthPixels(30);
+            processResult.setHeightPixels(30);
+        }
 
         IntWrapper intWrapper = new IntWrapper(-1);
 
         Path inputPath = null;
         Path signalPath = null;
-        Path finalOutputPath = null;
 
         try {
             // Salva o arquivo de entrada recebido do cliente
@@ -280,22 +337,20 @@ public class ImageService {
             signalPath = signalGain(inputPath);
             // Aplica o algoritmo de reconstrução (gera o arquivo temporário final)
             if (algorithm == Algorithm.CGNE) {
-                finalOutputPath = CGNE(signalPath, intWrapper);
+                finalOutputPath.set(CGNE(signalPath, intWrapper));
             } else if(algorithm == Algorithm.CGNR) {
-                finalOutputPath = CGNR(signalPath, intWrapper);
+                finalOutputPath.set(CGNR(signalPath, intWrapper));
             }
 
             processResult.setNumIterations(intWrapper.getNum());
-
-            // Envia o resultado final para o cliente
-            toOutputStream(finalOutputPath, output);
             
         } finally {
             // Limpa TODOS os rastros do disco do servidor
             deleteTempFile(inputPath);
             deleteTempFile(signalPath);
-            deleteTempFile(finalOutputPath);
         }
+
+        processResult.setEndDateTime(LocalDateTime.now());
         return processResult;
     }
 }

@@ -5,6 +5,48 @@
 * Python 3.10+
 * Java 17+
 
+## Running the client
+
+1. Go to the directory:
+
+```
+cd client
+```
+
+2. Create a virtual environment:
+
+```
+python3 -m venv .venv
+```
+
+3. Activate the environment:
+
+* Linux / WSL / Mac:
+
+```
+source .venv/bin/activate
+```
+
+* Windows:
+
+```
+.venv\Scripts\activate
+```
+
+4. Install dependencies:
+
+```
+pip install -r requirements.txt
+```
+
+5. Config the client in constants.py
+
+6. Run the client:
+
+```
+python3 main.py
+```
+
 ## Running the Python Server
 
 1. Go to the directory:
