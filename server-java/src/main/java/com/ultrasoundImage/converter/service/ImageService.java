@@ -28,7 +28,8 @@ public class ImageService {
     public ImageService(){
         Random random = new Random();
         // numH eh igual a 1 ou 2
-        numH = random.nextInt(2) + 1;
+        // numH = random.nextInt(2) + 1;
+        numH = 2;
 
         tolerance = 1e-4;
         maxIterations = 10;
@@ -49,6 +50,8 @@ public class ImageService {
 
     // Possible improvement: return double[] to reduce memory cost
     private double[][] readCSV(Path path) throws IOException {
+        System.out.println("Início da leitura de " + path.toString());
+
         // get number of lines
         long numLines;
         try (var lines = Files.lines(path)) {
@@ -87,6 +90,7 @@ public class ImageService {
             }
             while ((line = br.readLine()) != null);
 
+            System.out.println("Fim da leitura de " + path);
             return matrix;
         }
     }
@@ -126,8 +130,11 @@ public class ImageService {
                         dos.writeDouble(gNovo);
     
                     } catch (EOFException e) {
-                        // Se o arquivo acabar antes do esperado pelo tamanho de N e S, interrompemos a leitura 
-                        break; 
+                        // Se o arquivo acabar antes do esperado pelo tamanho de N e S,
+                        // interrompemos a leitura
+                        System.out.println("Feito ganho de sinal");
+                        // Retorna o caminho do novo arquivo para o próximo passo (CGNE/CGNR)
+                        return outputPath;
                     }
                 }
             }
@@ -168,13 +175,8 @@ public class ImageService {
             // mudar para H.mul(alpha).mmul(p)?
             DoubleMatrix r2 = r.sub(H.mmul(p).mul(alpha));
 
-            // CÁLCULO DO ERRO: epsilon = ||r_{i+1}||_2 - ||r_i||_2
-            // A norma 2 (||x||_2) é a raiz quadrada do produto escalar (sqrt(x^T * x))
-            double normaR2 = Math.sqrt(r2.dot(r2));
-            double normaR = Math.sqrt(r_dot_r);
-            double epsilon = Math.abs(normaR2 - normaR);
-
-            if (epsilon < tolerance)
+            double r_dot_r2 = r2.dot(r2);
+            if (calcError(r_dot_r2, r_dot_r) < tolerance)
                 break;
 
             double beta = (r2.transpose().dot(r2)) / r_dot_r;
@@ -186,6 +188,69 @@ public class ImageService {
 
         System.out.println("Feito CGNR");
         return saveMatrixToTempFile(f);
+    }
+
+    private Path CGNE(Path signalPath, IntWrapper intWrapper) throws IOException {
+        System.out.println("Iniciado CGNE");
+
+        // Carregar a Matriz de Modelo (H): usando o CSV original
+        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
+
+        // Carregar o Vetor de Sinal (g)
+        DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
+
+        // Inicialização
+        DoubleMatrix f = DoubleMatrix.zeros(H.columns, 1);
+        DoubleMatrix r = g.dup();
+        DoubleMatrix p = H.transpose().mmul(r);
+
+        // Guarda o (r^T * r) inicial
+        double rDotR = r.dot(r);
+
+        for (int i = 0; i < maxIterations; i++) {
+            System.out.println("Iteração: " + (i + 1));
+            // usado para o ProcessResult
+            // i + 1 para trabalhar com números nesse intervalo: [1, maxIterations]
+            intWrapper.setNum(i + 1);
+
+            double pDotP = p.dot(p);
+            double alpha = rDotR / pDotP;
+
+            // f_{i+1} = f_i + alpha * p_i
+            f.addi(p.mul(alpha));
+            // r_{i+1} = r_i - alpha * H * p_i
+            DoubleMatrix Hp = H.mmul(p);
+            r.subi(Hp.mul(alpha));
+            // Calcula o (r_{i+1}^T * r_{i+1})
+            double rNextDotRNext = r.dot(r);
+
+            // Verifica a convergência baseada no epsilon
+            if (calcError(rNextDotRNext, rDotR) < tolerance) {
+                break;
+            }
+
+            // beta = (r_{i+1}^T * r_{i+1}) / (r_i^T * r_i)
+            double beta = rNextDotRNext / rDotR;
+            // p_{i+1} = H^T * r_{i+1} + beta * p_i
+            DoubleMatrix HTrNext = H.transpose().mmul(r);
+            p = HTrNext.add(p.mul(beta));
+            // Atualiza o rDotR para a próxima iteração
+            rDotR = rNextDotRNext;
+        }
+
+        System.out.println("Feito CGNE");
+        return saveMatrixToTempFile(f);
+    }
+
+    // calcula o valor do erro das iterações dos algoritmos CGNE e CGNR
+    private double calcError(double rNextDotRNext, double rDotR){
+        // CÁLCULO DO ERRO: epsilon = ||r_{i+1}||_2 - ||r_i||_2
+        // A norma 2 (||x||_2) é a raiz quadrada do produto escalar (sqrt(x^T * x))
+        double normaRProximo = Math.sqrt(rNextDotRNext);
+        double normaRAtual = Math.sqrt(rDotR);
+
+        // return epsilon
+        return Math.abs(normaRProximo - normaRAtual);
     }
 
     // Lê um arquivo binário de doubles e o converte para um array bidimensional (vetor coluna).
@@ -205,63 +270,6 @@ public class ImageService {
             }
         }
         return matrix;
-    }
-
-    private Path CGNE(Path signalPath, IntWrapper intWrapper) throws IOException {
-        System.out.println("Iniciado CGNE");
-
-        // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
-
-        // Carregar o Vetor de Sinal (g)
-        DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
-
-        // Inicialização
-        DoubleMatrix f = DoubleMatrix.zeros(H.columns, 1); 
-        DoubleMatrix r = g.dup();                          
-        DoubleMatrix p = H.transpose().mmul(r);
-        
-        // Guarda o (r^T * r) inicial 
-        double rDotR = r.dot(r); 
-
-        for (int i = 0; i < maxIterations; i++) {
-            System.out.println("Iteração: " + (i + 1));
-            // usado para o ProcessResult
-            // i + 1 para trabalhar com números nesse intervalo: [1, maxIterations]
-            intWrapper.setNum(i + 1);
-
-            double pDotP = p.dot(p);
-            double alpha = rDotR / pDotP;
-            // f_{i+1} = f_i + alpha * p_i
-            f.addi(p.mul(alpha));
-            // r_{i+1} = r_i - alpha * H * p_i
-            DoubleMatrix Hp = H.mmul(p);
-            r.subi(Hp.mul(alpha));
-            // Calcula o (r_{i+1}^T * r_{i+1})
-            double rNextDotRNext = r.dot(r);
-
-            // CÁLCULO DO ERRO: epsilon = ||r_{i+1}||_2 - ||r_i||_2
-            // A norma 2 (||x||_2) é a raiz quadrada do produto escalar (sqrt(x^T * x))
-            double normaRProximo = Math.sqrt(rNextDotRNext);
-            double normaRAtual = Math.sqrt(rDotR);
-            double epsilon = Math.abs(normaRProximo - normaRAtual); // Math.abs para garantir que a diferença seja positiva
-
-            // Verifica a convergência baseada no epsilon
-            if (epsilon < tolerance) {
-                break;
-            }
-
-            // beta = (r_{i+1}^T * r_{i+1}) / (r_i^T * r_i)
-            double beta = rNextDotRNext / rDotR;
-            // p_{i+1} = H^T * r_{i+1} + beta * p_i
-            DoubleMatrix HTrNext = H.transpose().mmul(r);
-            p = HTrNext.add(p.mul(beta));
-            // Atualiza o rDotR para a próxima iteração
-            rDotR = rNextDotRNext;
-        }
-
-        System.out.println("Feito CGNE");
-        return saveMatrixToTempFile(f);
     }
 
     // Método auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,

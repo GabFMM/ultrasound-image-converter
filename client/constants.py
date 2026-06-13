@@ -8,3 +8,5 @@ URL = "http://localhost:8080/image"
 
 # mudar para "CGNE" if random.randint(0, 1) == 0 else "CGNR" para atender requisito
 ALGORITHM = "CGNE" if random.randint(0, 1) == 0 else "CGNR"
+
+TIMEOUT = 120
