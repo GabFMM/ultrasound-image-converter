@@ -90,7 +90,7 @@ flask --app controller.controller run
 ## Running the Java Server
 
 ### Option 1 — Run using Maven (recommended for development)
-Replace <num> with the size of your computer's RAM memory * 0.9 (round down to the nearest integer)
+Replace \<num\> with the size of your computer's RAM memory * 0.9 (round down to the nearest integer)
 
 ```
 cd server-java
@@ -106,9 +106,8 @@ cd server-java
 ./mvnw clean package
 ```
 
-2. Run the JAR:
-Replace <num> with the size of your computer's RAM memory * 0.9 (round down to the nearest integer)
-
+2. Run the JAR:  
+Replace \<num\> with the size of your computer's RAM memory * 0.9 (round down to the nearest integer)
 
 ```
 java -Xmx<num>g -jar target/converter-0.0.1-SNAPSHOT.jar
