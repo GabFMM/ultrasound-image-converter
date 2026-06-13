@@ -42,7 +42,7 @@ if __name__ == "__main__":
         height = response.headers.get("height-pixels")
         width = response.headers.get("width-pixels")
 
-        if height is str and width is str:
+        if height and width:
             height = int(height)
             width = int(width)
 
