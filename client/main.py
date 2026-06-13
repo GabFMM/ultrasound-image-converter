@@ -28,16 +28,17 @@ if __name__ == "__main__":
     }
 
     try:
-        with open(f"input/G-{NUM_INPUT}.csv", "rb") as f:
-            response = requests.post(
-                URL,
-                params=param,
-                data=f,
-                headers={
-                    "Content-Type": "application/octet-stream"
-                },
-                timeout=120
-            )
+        g = np.loadtxt(f"input/G-{NUM_INPUT}.csv", delimiter=",")
+
+        response = requests.post(
+            URL,
+            params=param,
+            data=g.astype(">f8").tobytes(), # envia os dados em binário mesmo em big-endian
+            headers={
+                "Content-Type": "application/octet-stream"
+            },
+            timeout=120
+        )
         
         height = response.headers.get("height-pixels")
         width = response.headers.get("width-pixels")
@@ -47,10 +48,17 @@ if __name__ == "__main__":
             width = int(width)
 
             # salva o arquivo retornado
-            img = np.frombuffer(response.content, dtype=np.float64)
+            # >f8 significa para interpretar o response.content como doubles em big-endian
+            # o big-endian eh determinado pelo DataOutputStream do server Java
+            img = np.frombuffer(response.content, dtype=">f8")
+            
             img = img.reshape((height, width))
 
-            img = np.clip(img * 255, 0, 255).astype(np.uint8)
+            # normaliza valores entre 0 e 1
+            img = (img - img.min()) / (img.max() - img.min())
+            
+            # transforma valores entre 0 e 255
+            img = (img * 255).astype(np.uint8)
 
             Image.fromarray(img).save(getFilename(NUM_INPUT))
 
