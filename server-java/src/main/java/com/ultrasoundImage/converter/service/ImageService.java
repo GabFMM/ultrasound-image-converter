@@ -13,10 +13,14 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.Random;
 import java.util.StringTokenizer;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class ImageService {
+
+    // semáforo para evitar queda do servidor
+    private final Semaphore semaphore;
 
     // Determina qual matriz modelo H usar
     private final int numH;
@@ -26,6 +30,9 @@ public class ImageService {
     private final int maxIterations;
 
     public ImageService(){
+        // mudar para mais ou para menos, porém é manual
+        semaphore = new Semaphore(2);
+
         Random random = new Random();
         // numH eh igual a 1 ou 2
         // numH = random.nextInt(2) + 1;
@@ -347,13 +354,27 @@ public class ImageService {
         try {
             // Salva o arquivo de entrada recebido do cliente
             inputPath = createTempFile(input);
+
             // Aplica o ganho de sinal (gera o primeiro arquivo temporário intermediário)
             signalPath = signalGain(inputPath);
-            // Aplica o algoritmo de reconstrução (gera o arquivo temporário final)
-            if (algorithm == Algorithm.CGNE) {
-                finalOutputPath.set(CGNE(signalPath, intWrapper));
-            } else if(algorithm == Algorithm.CGNR) {
-                finalOutputPath.set(CGNR(signalPath, intWrapper));
+
+            // uso semáforo para evitar a queda do servidor
+            try{
+                semaphore.acquire();
+
+                // Aplica o algoritmo de reconstrução (gera o arquivo temporário final)
+                if (algorithm == Algorithm.CGNE) {
+                    finalOutputPath.set(CGNE(signalPath, intWrapper));
+                } else if(algorithm == Algorithm.CGNR) {
+                    finalOutputPath.set(CGNR(signalPath, intWrapper));
+                }
+            }
+            catch (InterruptedException e) {
+                // caso impossível de acontecer
+                throw new RuntimeException("uma thread foi interrupta");
+            }
+            finally {
+                semaphore.release();
             }
 
             processResult.setNumIterations(intWrapper.getNum());
