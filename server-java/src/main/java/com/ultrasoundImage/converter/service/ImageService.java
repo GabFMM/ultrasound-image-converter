@@ -29,7 +29,7 @@ public class ImageService {
         Random random = new Random();
         // numH eh igual a 1 ou 2
         // numH = random.nextInt(2) + 1;
-        numH = 2;
+        numH = 1;
 
         tolerance = 1e-4;
         maxIterations = 10;
@@ -154,10 +154,13 @@ public class ImageService {
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
 
+        // Guarda a H transposta para diminuir sobrecarga do GC
+        DoubleMatrix Ht = H.transpose();
+
         // Inicialização
         DoubleMatrix f = DoubleMatrix.zeros(H.columns, 1);
         DoubleMatrix r = g.dup();
-        DoubleMatrix p = H.transpose().mmul(r);
+        DoubleMatrix p = Ht.mmul(r);
 
         for (int i = 0; i < maxIterations; i++) {
             System.out.println("Iteração: " + (i + 1));
@@ -183,7 +186,7 @@ public class ImageService {
 
             r = r2;
 
-            p = H.transpose().mmul(r).add(p.mul(beta));
+            p = Ht.mmul(r).add(p.mul(beta));
         }
 
         System.out.println("Feito CGNR");
@@ -199,10 +202,13 @@ public class ImageService {
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
 
+        // Guarda a H transposta para diminuir sobrecarga do GC
+        DoubleMatrix Ht = H.transpose();
+
         // Inicialização
         DoubleMatrix f = DoubleMatrix.zeros(H.columns, 1);
         DoubleMatrix r = g.dup();
-        DoubleMatrix p = H.transpose().mmul(r);
+        DoubleMatrix p = Ht.mmul(r);
 
         // Guarda o (r^T * r) inicial
         double rDotR = r.dot(r);
@@ -232,7 +238,7 @@ public class ImageService {
             // beta = (r_{i+1}^T * r_{i+1}) / (r_i^T * r_i)
             double beta = rNextDotRNext / rDotR;
             // p_{i+1} = H^T * r_{i+1} + beta * p_i
-            DoubleMatrix HTrNext = H.transpose().mmul(r);
+            DoubleMatrix HTrNext = Ht.mmul(r);
             p = HTrNext.add(p.mul(beta));
             // Atualiza o rDotR para a próxima iteração
             rDotR = rNextDotRNext;

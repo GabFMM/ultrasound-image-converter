@@ -99,7 +99,7 @@ def showMainInfos(response: requests.Response, numInput: int):
 
 if __name__ == "__main__":
     try:
-        numInputs = [4, 5, 6]
+        numInputs = [2]
         for numInput in numInputs:
             response = sendRequest(ALGORITHM, numInput, TIMEOUT)
             
