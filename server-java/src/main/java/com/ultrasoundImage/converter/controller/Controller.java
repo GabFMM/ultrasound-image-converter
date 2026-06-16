@@ -25,6 +25,7 @@ public class Controller {
     @PostMapping(value = "/image", consumes = "application/octet-stream")
     public void process(
             @RequestParam Algorithm algorithm,
+            @RequestParam("num-input") int numInput,
             HttpServletRequest request,
             HttpServletResponse response
     ) throws IOException
@@ -38,6 +39,7 @@ public class Controller {
         AtomicReference<Path> outputPath = new AtomicReference<>(null);
         ProcessResult processResult = imageService.process(
                 algorithm,
+                numInput,
                 request.getInputStream(),
                 outputPath
         );

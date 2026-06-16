@@ -5,6 +5,7 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 import cv2
+import threading
 
 # retorna um nome de arquivo unico
 # evita sobreescrever arquivos existentes 
@@ -25,15 +26,16 @@ def getFilename(numInput: int) -> str:
 
 # numInput determina qual arquivo de dados usar
 def sendRequest(algorithm: str, numInput: int, timeout: int) -> requests.Response:
-    param = {
-        "algorithm" : algorithm
+    params = {
+        "algorithm" : algorithm,
+        "num-input" : str(numInput)
     }
 
     g = np.loadtxt(f"input/G-{numInput}.csv", delimiter=",")
 
     return requests.post(
         URL,
-        params=param,
+        params=params,
         data=g.astype(">f8").tobytes(), # envia os dados em binário em big-endian
         headers={
             "Content-Type": "application/octet-stream"
@@ -99,13 +101,16 @@ def showMainInfos(response: requests.Response, numInput: int):
 
 if __name__ == "__main__":
     try:
-        numInputs = [3]
-        for numInput in numInputs:
-            response = sendRequest(ALGORITHM, numInput, TIMEOUT)
-            
-            generateImage(response, numInput)
+        def fun():
+            response = sendRequest(ALGORITHM, 1, TIMEOUT)
+        
+            generateImage(response, 1)
 
-            showMainInfos(response, numInput)
+            showMainInfos(response, 1)
+
+        for _ in range(2):
+            thread = threading.Thread(target=fun)
+            thread.start()
 
     except(requests.exceptions.Timeout):
         print("Servidor demorou demais para responder")

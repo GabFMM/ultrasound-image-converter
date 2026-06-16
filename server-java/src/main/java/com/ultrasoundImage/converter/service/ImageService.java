@@ -22,9 +22,6 @@ public class ImageService {
     // semáforo para evitar queda do servidor
     private final Semaphore semaphore;
 
-    // Determina qual matriz modelo H usar
-    private final int numH;
-
     // Usado no CGNE ou no CGNR
     private final double tolerance;
     private final int maxIterations;
@@ -32,11 +29,6 @@ public class ImageService {
     public ImageService(){
         // mudar para mais ou para menos, porém é manual
         semaphore = new Semaphore(2);
-
-        Random random = new Random();
-        // numH eh igual a 1 ou 2
-        // numH = random.nextInt(2) + 1;
-        numH = 1;
 
         tolerance = 1e-4;
         maxIterations = 10;
@@ -102,7 +94,7 @@ public class ImageService {
         }
     }
 
-    private Path signalGain(Path inputPath) throws IOException {
+    private Path signalGain(Path inputPath, int numH) throws IOException {
         System.out.println("Iniciado ganho de sinal");
 
         // Arquivo temporário para salvar o sinal com ganho
@@ -152,7 +144,7 @@ public class ImageService {
         return outputPath; // Retorna o caminho do novo arquivo para o próximo passo (CGNE/CGNR)
     }
 
-    private Path CGNR(Path signalPath, IntWrapper intWrapper) throws IOException {
+    private Path CGNR(Path signalPath, int numH, IntWrapper intWrapper) throws IOException {
         System.out.println("Iniciado CGNR");
 
         // Carregar a Matriz de Modelo (H): usando o CSV original
@@ -182,7 +174,6 @@ public class ImageService {
 
             f = f.add(p.mul(alpha));
 
-            // mudar para H.mul(alpha).mmul(p)?
             DoubleMatrix r2 = r.sub(H.mmul(p).mul(alpha));
 
             double r_dot_r2 = r2.dot(r2);
@@ -200,7 +191,7 @@ public class ImageService {
         return saveMatrixToTempFile(f);
     }
 
-    private Path CGNE(Path signalPath, IntWrapper intWrapper) throws IOException {
+    private Path CGNE(Path signalPath, int numH, IntWrapper intWrapper) throws IOException {
         System.out.println("Iniciado CGNE");
 
         // Carregar a Matriz de Modelo (H): usando o CSV original
@@ -329,6 +320,7 @@ public class ImageService {
     
     public ProcessResult process(
             Algorithm algorithm,
+            int numInput,
             InputStream input,
             AtomicReference<Path> finalOutputPath
     ) throws IOException {
@@ -337,11 +329,19 @@ public class ImageService {
         processResult.setAlgorithm(algorithm);
         processResult.setStartDateTime(LocalDateTime.now());
 
+        int numH;
+        if(numInput >= 1 && numInput <= 3)
+            numH = 1;
+        else if(numInput >= 4 && numInput <= 6)
+            numH = 2;
+        else
+            throw new RuntimeException("numInput inválido");
+
         if(numH == 1){
             processResult.setWidthPixels(60);
             processResult.setHeightPixels(60);
         }
-        else if(numH == 2){
+        else if(numH == 2) {
             processResult.setWidthPixels(30);
             processResult.setHeightPixels(30);
         }
@@ -356,7 +356,7 @@ public class ImageService {
             inputPath = createTempFile(input);
 
             // Aplica o ganho de sinal (gera o primeiro arquivo temporário intermediário)
-            signalPath = signalGain(inputPath);
+            signalPath = signalGain(inputPath, numH);
 
             // uso semáforo para evitar a queda do servidor
             try{
@@ -364,9 +364,9 @@ public class ImageService {
 
                 // Aplica o algoritmo de reconstrução (gera o arquivo temporário final)
                 if (algorithm == Algorithm.CGNE) {
-                    finalOutputPath.set(CGNE(signalPath, intWrapper));
+                    finalOutputPath.set(CGNE(signalPath, numH, intWrapper));
                 } else if(algorithm == Algorithm.CGNR) {
-                    finalOutputPath.set(CGNR(signalPath, intWrapper));
+                    finalOutputPath.set(CGNR(signalPath, numH, intWrapper));
                 }
             }
             catch (InterruptedException e) {
