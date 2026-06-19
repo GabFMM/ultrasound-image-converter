@@ -77,6 +77,9 @@ def enlargeImage(filename: str):
     # O argumento 0 garante que o OpenCV leia exatamente como matriz única (tons de cinza)
     img = cv2.imread(filename, 0)
 
+    if img is None:
+        raise RuntimeError("Variável img é None")
+
     height, width = img.shape
 
     newSize = (height * 12, width * 12)

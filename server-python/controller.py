@@ -27,6 +27,11 @@ def process():
         "width-pixels": processResult.widthPixels
     }
 
+    @after_this_request
+    def cleanup(response):  
+        service.deleteFile(processResult.finalOutputPath)
+        return response
+
     return send_file(
         processResult.finalOutputPath.read_bytes(),
         mimetype="application/octet-stream",

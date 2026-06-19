@@ -172,9 +172,6 @@ def calcError(rNextDotRNext: np.float64, rDotR: np.float64):
     # return epsilon
     return math.abs(normaRProximo - normaRAtual)
 
-def signalGain(inputPath: Path) -> Path:
-    pass
-
 # There is no risk of races,
 # as createTempFile generates a single file per client
 # returns the temp file path
