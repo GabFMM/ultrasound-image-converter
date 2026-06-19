@@ -56,7 +56,8 @@ def generateImage(response: requests.Response, numInput: int):
         # o big-endian eh determinado pelo DataOutputStream do server Java
         img = np.frombuffer(response.content, dtype=">f8")
         
-        img = img.reshape((height, width))
+        # O order='F' (Fortran-like) avisa o numpy para ler as colunas primeiro, desvirando a imagem!
+        img = img.reshape((height, width), order='F')
 
         # normaliza valores entre 0 e 1
         img = (img - img.min()) / (img.max() - img.min())
