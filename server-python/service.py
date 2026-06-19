@@ -28,8 +28,85 @@ def readBinaryVector(path: Path) -> np.ndarray:
     # Converte para vetor coluna
     return vector.reshape((-1, 1))
 
+def signalGain(inputPath: Path) -> Path:
+    N = 64
+    S = 2048
+
+    # le o arquivo binário
+    # '>f8' força a leitura como big-endian 
+    g_original = np.fromfile(inputPath, dtype=">f8")
+
+    l = np.arange(1, S + 1)
+
+    # calcula o ganho (gamma) para uma coluna de amostras
+    gamma = 100.0 + (1.0 / 20.0) * l * np.sqrt(l)
+
+    # o ganho se repete para cada sensor (N)
+    full_gamma = np.tile(gamma, N)
+
+    # proteção 
+    limit = min(len(g_original), len(full_gamma))
+
+    # multiplica o sinal original pelo ganho
+    g_novo = g_original[:limit] * full_gamma[:limit]
+
+    with tempfile.NamedTemporaryFile(prefix="signal-gain-", suffix=".bin", delete=False) as temp_file:
+        # Salva como '>f8' (big-endian) para o próximo passo conseguir ler
+        g_novo.astype(">f8").tofile(temp_file)
+        return Path(temp_file.name)
+    
 def CGNE(signalPath: Path, processResult: ProcessResult):
-    pass
+    print("Iniciado CGNE")
+
+    # carrega a Matriz de Modelo
+    H = readCSV(Path(f"data/h{NUM_H}.csv"))
+
+    # carrega o Vetor de Sinal (g)
+    g = readBinaryVector(signalPath)
+
+    # transposta
+    Ht = H.T
+
+    f = np.zeros((H.shape[1], 1), dtype=np.float64) # f0 = 0
+    r = g.copy()                                    # r0 = g
+    p = Ht @ r                                      # p0 = H^T * r0
+
+    # guarda o (r^T * r) inicial 
+    r_dot_r = np.dot(r.ravel(), r.ravel())
+
+    for i in range(MAX_ITERATIONS):
+        print(f"Iteração: {i + 1}")
+
+        p_dot_p = np.dot(p.ravel(), p.ravel())
+        alpha = r_dot_r / p_dot_p
+
+        # f_{i+1} = f_i + alpha * p_i
+        f = f + p * alpha
+
+        # r_{i+1} = r_i - alpha * H * p_i
+        Hp = H @ p
+        r2 = r - Hp * alpha
+
+        r_dot_r2 = np.dot(r2.ravel(), r2.ravel())
+
+        # verifica convergência pelo erro epsion
+        if calcError(r_dot_r2, r_dot_r) < TOLERANCE:
+            break
+
+        # beta = (r_{i+1}^T * r_{i+1}) / (r_i^T * r_i)
+        beta = r_dot_r2 / r_dot_r
+
+        # p_{i+1} = H^T * r_{i+1} + beta * p_i
+        p = (Ht @ r2) + (p * beta)
+
+        # Atualiza variáveis para próxima iteração
+        r = r2
+        r_dot_r = r_dot_r2
+
+    processResult.numIterations = i + 1
+
+    print("Feito CGNE")
+    return saveMatrixToTempFile(f)
 
 def CGNR(signalPath: Path, processResult: ProcessResult):
     print("Iniciado CGNR")
