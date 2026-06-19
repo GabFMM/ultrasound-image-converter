@@ -8,7 +8,6 @@ import random
 import matplotlib
 matplotlib.use('Agg') # 'Agg' é o backend que só salva arquivos, não abre janelas
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 
 # retorna um nome de arquivo unico
 # evita sobreescrever arquivos existentes 
@@ -67,7 +66,7 @@ def generateImage(response: requests.Response, numInput: int):
 
     # mostrar imagem 
     # interpolation='bicubic'suaviza os pixels 60x60
-    im = ax.imshow(img, cmap='gray', interpolation='bicubic', extent=[1, width, height, 1])
+    im = ax.imshow(img, cmap='gray', interpolation='nearest', extent=[1, width, height, 1])
 
     # eixos 
     ax.set_xticks(np.arange(10, width + 1, 10))
