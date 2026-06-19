@@ -1,11 +1,14 @@
 from constants import *
-
 import requests
 from pathlib import Path
-from PIL import Image
 import numpy as np
-import cv2
 import threading
+import random
+
+import matplotlib
+matplotlib.use('Agg') # 'Agg' é o backend que só salva arquivos, não abre janelas
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
 # retorna um nome de arquivo unico
 # evita sobreescrever arquivos existentes 
@@ -44,51 +47,42 @@ def sendRequest(algorithm: str, numInput: int, timeout: int) -> requests.Respons
     )
 
 def generateImage(response: requests.Response, numInput: int):
+    # 1. Recuperar Altura/Largura
     height = response.headers.get("height-pixels")
     width = response.headers.get("width-pixels")
 
-    if height and width:
-        height = int(height)
-        width = int(width)
+    if not height or not width:
+        print("Altura ou largura são inválidos e são None")
+        return
 
-        # salva o arquivo retornado
-        # >f8 significa para interpretar o response.content como doubles em big-endian
-        # o big-endian eh determinado pelo DataOutputStream do server Java
-        img = np.frombuffer(response.content, dtype=">f8")
-        
-        # O order='F' (Fortran-like) avisa o numpy para ler as colunas primeiro, desvirando a imagem!
-        img = img.reshape((height, width), order='F')
+    height, width = int(height), int(width)
 
-        # normaliza valores entre 0 e 1
-        img = (img - img.min()) / (img.max() - img.min())
-        
-        # transforma valores entre 0 e 255
-        img = (img * 255).astype(np.uint8)
+    # 2. Recuperar matriz binária (mantenha a lógica Column-Major que desvira a imagem)
+    img = np.frombuffer(response.content, dtype=">f8")
+    img = img.reshape((height, width), order='F')
 
-        filename = getFilename(numInput)
-        Image.fromarray(img).save(filename)
+    # 3. Configurar o Plot de Alta Resolução (Matplotlib)
+    fig, ax = plt.subplots(figsize=(6, 6), dpi=100) # Cria uma figura quadrada decente
+    ax.set_title(f"Reconstrução G-{numInput}")
 
-        enlargeImage(filename)
-    else:
-        print("Altura ou largura sao invalidos e sao None")
+    # 4. Mostrar imagem com a NITIDEZ GABARITO
+    # cmap='gray' garante o preto e branco (sem colormap colorido)
+    # interpolation='bicubic' é o segredo: ele suaviza os pixels 60x60 igual ao gabarito!
+    im = ax.imshow(img, cmap='gray', interpolation='bicubic', extent=[1, width, height, 1])
 
-def enlargeImage(filename: str):
-    # Carrega a imagem em escala de cinza (0 a 255)
-    # O argumento 0 garante que o OpenCV leia exatamente como matriz única (tons de cinza)
-    img = cv2.imread(filename, 0)
+    # 5. Configurar eixos 1-60 (exatamente como na imagem_10.png)
+    ax.set_xticks(np.arange(10, width + 1, 10))
+    ax.set_yticks(np.arange(10, height + 1, 10))
+    
+    # Adiciona a grid discreta se você gostar (opcional)
+    # ax.grid(True, color='white', linestyle='-', linewidth=0.5, alpha=0.3)
 
-    height, width = img.shape
+    # 6. Salvar a figura de alta qualidade no disco
+    filename = getFilename(numInput) # Mantenha sua função de nomear original
+    plt.savefig(filename, dpi=150, bbox_inches='tight')
+    plt.close(fig) # Fecha a figura para não ocupar memória
 
-    newSize = (height * 12, width * 12)
-
-    # Redimensiona usando Lanczos
-    enlargedImg = cv2.resize(img, newSize, interpolation=cv2.INTER_LANCZOS4)
-
-    # remove "output/"
-    filename = filename[7:]
-
-    # Salva o resultado
-    cv2.imwrite(f"output/enlarged-{filename}", enlargedImg)
+    print(f"-> Imagem de alta qualidade (suavizada) salva em: {filename}")
 
 def showMainInfos(response: requests.Response, numInput: int):
     print(f"Arquivo de dados G-{numInput}:")
@@ -133,4 +127,4 @@ def test():
         print("Servidor demorou demais para responder")
 
 if __name__ == "__main__":
-    mainTest(1, [4, 5, 6])
+    mainTest(1, [1, 2, 3])
