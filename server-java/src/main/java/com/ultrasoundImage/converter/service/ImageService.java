@@ -42,11 +42,6 @@ public class ImageService {
         return tempInput;
     }
 
-    private void deleteTempFile(Path path) throws IOException {
-        if(path != null)
-            Files.deleteIfExists(path);
-    }
-
     // Possible improvement: return double[] to reduce memory cost
     private double[][] readCSV(Path path) throws IOException {
         System.out.println("Início da leitura de " + path.toString());
@@ -288,6 +283,11 @@ public class ImageService {
             }
         } 
         return tempFile;
+    }
+
+    public void deleteTempFile(Path path) throws IOException {
+        if(path != null)
+            Files.deleteIfExists(path);
     }
 
     public void toOutputStream(Path path, OutputStream outputStream) throws IOException{

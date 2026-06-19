@@ -74,6 +74,14 @@ public class Controller {
                 Integer.toString(processResult.getNumIterations())
         );
 
-        imageService.toOutputStream(outputPath.get(), response.getOutputStream());
+        try {
+            imageService.toOutputStream(outputPath.get(), response.getOutputStream());
+        }
+        catch (IOException e) {
+            System.out.println("Envio dos dados finais foi interrompido");
+        }
+        finally {
+            imageService.deleteTempFile(outputPath.get());
+        }
     }
 }
