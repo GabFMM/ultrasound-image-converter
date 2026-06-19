@@ -14,12 +14,16 @@ import java.time.LocalDateTime;
 import java.util.StringTokenizer;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class ImageService {
 
     // semáforo para evitar queda do servidor
     private final Semaphore semaphore;
+
+    // Cache para guardar as matrizes gigantes na RAM
+    private final ConcurrentHashMap<Integer, DoubleMatrix> modelCache = new ConcurrentHashMap<>();
 
     // Usado no CGNE ou no CGNR
     private final double tolerance;
@@ -143,11 +147,28 @@ public class ImageService {
         return outputPath; // Retorna o caminho do novo arquivo para o próximo passo (CGNE/CGNR)
     }
 
+    private DoubleMatrix getModelMatrix(int numH) throws IOException {
+        // ve se a matriz já está no Cache
+        if (modelCache.containsKey(numH)) {
+            System.out.println("Matriz h" + numH + " recuperada instantaneamente do CACHE");
+            return modelCache.get(numH);
+        }
+
+        // se não estiver, lê do disco 
+        System.out.println("Matriz h" + numH + " não encontrada no cache. Lendo do disco pela primeira vez...");
+        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
+        
+        // salva no cache
+        modelCache.put(numH, H);
+        
+        return H;
+    }
+
     private Path CGNR(Path signalPath, int numH, IntWrapper intWrapper) throws IOException {
         System.out.println("Iniciado CGNR");
 
-        // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
+        // Carregar a Matriz de Modelo (H) usando o nosso Gerente de Cache
+        DoubleMatrix H = getModelMatrix(numH);
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
@@ -193,8 +214,8 @@ public class ImageService {
     private Path CGNE(Path signalPath, int numH, IntWrapper intWrapper) throws IOException {
         System.out.println("Iniciado CGNE");
 
-        // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
+        // Carregar a Matriz de Modelo (H) usando o nosso Gerente de Cache
+        DoubleMatrix H = getModelMatrix(numH);
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
