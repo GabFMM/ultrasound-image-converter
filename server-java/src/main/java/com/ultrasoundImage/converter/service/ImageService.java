@@ -11,16 +11,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
-import java.util.Random;
 import java.util.StringTokenizer;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class ImageService {
 
     // semáforo para evitar queda do servidor
     private final Semaphore semaphore;
+
+    // Cache para guardar as matrizes gigantes na RAM
+    private final ConcurrentHashMap<Integer, DoubleMatrix> modelCache = new ConcurrentHashMap<>();
 
     // Usado no CGNE ou no CGNR
     private final double tolerance;
@@ -32,6 +35,23 @@ public class ImageService {
 
         tolerance = 1e-4;
         maxIterations = 10;
+    }
+
+    private DoubleMatrix getModelMatrix(int numH) throws IOException {
+        // Passo A: Verifica se a matriz já está na nossa "prateleira" (Cache)
+        if (modelCache.containsKey(numH)) {
+            System.out.println("Matriz h" + numH + " recuperada instantaneamente do cache");
+            return modelCache.get(numH);
+        }
+
+        // Passo B: Se não estiver, lê do disco (operação lenta)
+        System.out.println("Matriz h" + numH + " não encontrada no cache. Lendo do disco pela primeira vez...");
+        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
+        
+        // Passo C: Salva na prateleira para as próximas requisições não precisarem esperar
+        modelCache.put(numH, H);
+        
+        return H;
     }
 
     // There is no risk of races,
@@ -143,7 +163,7 @@ public class ImageService {
         System.out.println("Iniciado CGNR");
 
         // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
+        DoubleMatrix H = getModelMatrix(numH);
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
@@ -190,7 +210,7 @@ public class ImageService {
         System.out.println("Iniciado CGNE");
 
         // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
+        DoubleMatrix H = getModelMatrix(numH);
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
@@ -285,11 +305,6 @@ public class ImageService {
         return tempFile;
     }
 
-    public void deleteTempFile(Path path) throws IOException {
-        if(path != null)
-            Files.deleteIfExists(path);
-    }
-
     public void toOutputStream(Path path, OutputStream outputStream) throws IOException{
         if(path == null)
             return;
@@ -316,6 +331,11 @@ public class ImageService {
         finally {
             deleteTempFile(path);
         }
+    }
+
+    public void deleteTempFile(Path path) throws IOException {
+        if(path != null)
+            Files.deleteIfExists(path);
     }
     
     public ProcessResult process(

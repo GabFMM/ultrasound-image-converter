@@ -1,5 +1,3 @@
-import random
-
 # determina qual arquivo de dados usar
 # mudar para random.randint(1, 6) para atender requisito
 NUM_INPUT = 5

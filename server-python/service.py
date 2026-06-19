@@ -108,7 +108,7 @@ def CGNE(signalPath: Path, numH: int, processResult: ProcessResult):
 
     processResult.numIterations = i + 1
 
-    processResult.finalOutputPath = saveMatrixToTempFile(f)
+    processResult.finalOutputPath = saveMatrixToTempFile(abs(f))
 
     print("Feito CGNR")
 
