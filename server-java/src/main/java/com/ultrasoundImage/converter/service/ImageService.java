@@ -209,8 +209,6 @@ public class ImageService {
             p = Ht.mmul(r).add(p.mul(beta));
         }
 
-        abs(f);
-
         System.out.println("Feito CGNR");
 
         return saveMatrixToTempFile(f);
@@ -269,7 +267,7 @@ public class ImageService {
 
         abs(f);
 
-        System.out.println("Feito CGNR");
+        System.out.println("Feito CGNE");
 
         return saveMatrixToTempFile(f);
     }

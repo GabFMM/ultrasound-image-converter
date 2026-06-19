@@ -82,6 +82,9 @@ public class Controller {
         }
         finally {
             imageService.deleteTempFile(outputPath.get());
+
+            System.out.println("Resposta enviada para o cliente");
+            System.out.println("=========================================");
         }
     }
 }
