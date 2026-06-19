@@ -99,19 +99,37 @@ def showMainInfos(response: requests.Response, numInput: int):
     print("-> Largura:", response.headers.get("width-pixels"))
     print("=" * 40)
 
-if __name__ == "__main__":
+# Para teste de carga do servidor
+def mainTest(numThreads: int, numInputs: list[int]):
     try:
         def fun():
-            response = sendRequest(ALGORITHM, 1, TIMEOUT)
-        
-            generateImage(response, 1)
+            for input in numInputs:
+                algorithm = "CGNE" if random.randint(0, 1) == 0 else "CGNR"
 
-            showMainInfos(response, 1)
+                response = sendRequest(algorithm, input, TIMEOUT)
+            
+                generateImage(response, input)
 
-        for _ in range(2):
+                showMainInfos(response, input)
+
+        for _ in range(numThreads):
             thread = threading.Thread(target=fun)
-            thread.start()
+            thread.start()        
 
     except(requests.exceptions.Timeout):
         print("Servidor demorou demais para responder")
+
+# Apenas para desenvolvimento
+def test():
+    try:
+        response = sendRequest(ALGORITHM, NUM_INPUT, TIMEOUT)
     
+        generateImage(response, NUM_INPUT)
+
+        showMainInfos(response, NUM_INPUT)       
+
+    except(requests.exceptions.Timeout):
+        print("Servidor demorou demais para responder")
+
+if __name__ == "__main__":
+    mainTest(1, [4, 5, 6])
