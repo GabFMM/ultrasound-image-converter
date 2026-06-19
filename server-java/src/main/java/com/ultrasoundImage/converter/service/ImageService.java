@@ -159,6 +159,13 @@ public class ImageService {
         return outputPath; // Retorna o caminho do novo arquivo para o próximo passo (CGNE/CGNR)
     }
 
+    private void abs(DoubleMatrix m){
+        for(int i = 0; i < m.rows; i++)
+            for(int j = 0; j < m.columns; j++)
+                if(m.get(i, j) < 0)
+                    m.put(i, j, -m.get(i, j));
+    }
+
     private Path CGNR(Path signalPath, int numH, IntWrapper intWrapper) throws IOException {
         System.out.println("Iniciado CGNR");
 
@@ -202,7 +209,10 @@ public class ImageService {
             p = Ht.mmul(r).add(p.mul(beta));
         }
 
+        abs(f);
+
         System.out.println("Feito CGNR");
+
         return saveMatrixToTempFile(f);
     }
 
@@ -257,7 +267,10 @@ public class ImageService {
             rDotR = rNextDotRNext;
         }
 
-        System.out.println("Feito CGNE");
+        abs(f);
+
+        System.out.println("Feito CGNR");
+
         return saveMatrixToTempFile(f);
     }
 
