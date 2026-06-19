@@ -47,7 +47,7 @@ def sendRequest(algorithm: str, numInput: int, timeout: int) -> requests.Respons
     )
 
 def generateImage(response: requests.Response, numInput: int):
-    # 1. Recuperar Altura/Largura
+    # recuperar Altura/Largura
     height = response.headers.get("height-pixels")
     width = response.headers.get("width-pixels")
 
@@ -57,30 +57,26 @@ def generateImage(response: requests.Response, numInput: int):
 
     height, width = int(height), int(width)
 
-    # 2. Recuperar matriz binária (mantenha a lógica Column-Major que desvira a imagem)
+    # recuperar matriz binária (mantenha a lógica Column-Major que desvira a imagem)
     img = np.frombuffer(response.content, dtype=">f8")
     img = img.reshape((height, width), order='F')
 
-    # 3. Configurar o Plot de Alta Resolução (Matplotlib)
+    # configurar o Plot de Alta Resolução (Matplotlib)
     fig, ax = plt.subplots(figsize=(6, 6), dpi=100) # Cria uma figura quadrada decente
     ax.set_title(f"Reconstrução G-{numInput}")
 
-    # 4. Mostrar imagem com a NITIDEZ GABARITO
-    # cmap='gray' garante o preto e branco (sem colormap colorido)
-    # interpolation='bicubic' é o segredo: ele suaviza os pixels 60x60 igual ao gabarito!
+    # mostrar imagem 
+    # interpolation='bicubic'suaviza os pixels 60x60
     im = ax.imshow(img, cmap='gray', interpolation='bicubic', extent=[1, width, height, 1])
 
-    # 5. Configurar eixos 1-60 (exatamente como na imagem_10.png)
+    # eixos 
     ax.set_xticks(np.arange(10, width + 1, 10))
     ax.set_yticks(np.arange(10, height + 1, 10))
-    
-    # Adiciona a grid discreta se você gostar (opcional)
-    # ax.grid(True, color='white', linestyle='-', linewidth=0.5, alpha=0.3)
 
-    # 6. Salvar a figura de alta qualidade no disco
-    filename = getFilename(numInput) # Mantenha sua função de nomear original
+    # salvar a figura no disco
+    filename = getFilename(numInput) 
     plt.savefig(filename, dpi=150, bbox_inches='tight')
-    plt.close(fig) # Fecha a figura para não ocupar memória
+    plt.close(fig) # fecha a figura para não ocupar memória
 
     print(f"-> Imagem de alta qualidade (suavizada) salva em: {filename}")
 
