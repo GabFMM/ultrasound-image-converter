@@ -1,12 +1,11 @@
 from processResult import ProcessResult
 from constants import *
 
-import datetime
 import tempfile
 import threading
-import shutil
 import math
 import numpy as np
+from datetime import datetime
 from typing import Literal
 from pathlib import Path
 
@@ -22,15 +21,19 @@ def readCSV(path: Path) -> np.ndarray:
 # Lê um arquivo binário de doubles e o converte para um array bidimensional (vetor coluna).
 # Ideal para ler o resultado do signalGain.
 def readBinaryVector(path: Path) -> np.ndarray:
-    # Lê todos os doubles do arquivo
-    vector = np.fromfile(path, dtype=np.float64)
+    # Lê todos os doubles do arquivo em big-endian
+    vector = np.fromfile(path, dtype=">f8")
 
     # Converte para vetor coluna
     return vector.reshape((-1, 1))
 
-def signalGain(inputPath: Path) -> Path:
-    N = 64
-    S = 2048
+def signalGain(inputPath: Path, numH: int) -> Path:
+    if numH == 1:
+        N = 64
+        S = 794
+    elif numH == 2:
+        N = 64
+        S = 436
 
     # le o arquivo binário
     # '>f8' força a leitura como big-endian 
@@ -55,11 +58,11 @@ def signalGain(inputPath: Path) -> Path:
         g_novo.astype(">f8").tofile(temp_file)
         return Path(temp_file.name)
     
-def CGNE(signalPath: Path, processResult: ProcessResult):
+def CGNE(signalPath: Path, numH: int, processResult: ProcessResult):
     print("Iniciado CGNE")
 
     # carrega a Matriz de Modelo
-    H = readCSV(Path(f"data/h{NUM_H}.csv"))
+    H = readCSV(Path(f"data/h{numH}.csv"))
 
     # carrega o Vetor de Sinal (g)
     g = readBinaryVector(signalPath)
@@ -105,14 +108,15 @@ def CGNE(signalPath: Path, processResult: ProcessResult):
 
     processResult.numIterations = i + 1
 
-    print("Feito CGNE")
-    return saveMatrixToTempFile(f)
+    processResult.finalOutputPath = saveMatrixToTempFile(f)
 
-def CGNR(signalPath: Path, processResult: ProcessResult):
+    print("Feito CGNR")
+
+def CGNR(signalPath: Path, numH: int, processResult: ProcessResult):
     print("Iniciado CGNR")
 
     # Carregar a Matriz de Modelo (H): usando o CSV original
-    H = readCSV(Path(f"data/h{NUM_H}.csv"))
+    H = readCSV(Path(f"data/h{numH}.csv"))
 
     # Carregar o Vetor de Sinal (g)
     g = readBinaryVector(signalPath)
@@ -150,8 +154,9 @@ def CGNR(signalPath: Path, processResult: ProcessResult):
 
     processResult.numIterations = i + 1
 
+    processResult.finalOutputPath = saveMatrixToTempFile(f)
+
     print("Feito CGNR")
-    return saveMatrixToTempFile(f)
 
 # Método auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
 # permitindo que o Controller envie via outputStream.
@@ -170,7 +175,7 @@ def calcError(rNextDotRNext: np.float64, rDotR: np.float64):
     normaRAtual = math.sqrt(rDotR)
 
     # return epsilon
-    return math.abs(normaRProximo - normaRAtual)
+    return abs(normaRProximo - normaRAtual)
 
 # There is no risk of races,
 # as createTempFile generates a single file per client
@@ -178,7 +183,7 @@ def calcError(rNextDotRNext: np.float64, rDotR: np.float64):
 def createTempFile(input_stream: bytes) -> Path:
     with tempfile.NamedTemporaryFile(prefix="upload-", suffix=".bin", delete=False) as temp_file:
         # Copia o conteudo do input_stream para o arquivo temporário
-        shutil.copyfileobj(input_stream, temp_file)
+        temp_file.write(input_stream)
 
         return Path(temp_file.name)
 
@@ -186,15 +191,17 @@ def deleteFile(path: Path | None):
     if path:
         path.unlink(missing_ok=True)
 
-def process(algorithm: Literal["CGNE", "CGNR"], inputData: bytes) -> ProcessResult:
+def process(algorithm: Literal["CGNE", "CGNR"], numInput: int, inputData: bytes) -> ProcessResult:
     processResult = ProcessResult()
     processResult.algorithm = algorithm
     processResult.startDateTime = datetime.now()
 
-    if NUM_H == 1:
+    if numInput >= 1 and numInput <= 3:
+        numH = 1
         processResult.heightPixels = 60
         processResult.widthPixels = 60
-    elif NUM_H == 2:
+    elif numInput >= 4 and numInput <= 6:
+        numH = 2
         processResult.heightPixels = 30
         processResult.widthPixels = 30
 
@@ -206,16 +213,16 @@ def process(algorithm: Literal["CGNE", "CGNR"], inputData: bytes) -> ProcessResu
         inputPath = createTempFile(inputData)
 
         # Aplica o ganho de sinal (gera o primeiro arquivo temporário intermediário)
-        signalPath = signalGain(inputPath)
+        signalPath = signalGain(inputPath, numH)
 
         # Usa semaforo para evitar queda do servidor
         with semaphore:
             
             # Aplica o algoritmo de reconstrução (gera o arquivo temporário final)
             if algorithm == "CGNE":
-                CGNE(signalPath, processResult)
+                CGNE(signalPath, numH, processResult)
             elif algorithm == "CGNR":
-                CGNR(signalPath, processResult)
+                CGNR(signalPath, numH, processResult)
 
     finally:
         # apaga os arquivos temporários

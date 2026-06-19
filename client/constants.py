@@ -4,9 +4,11 @@ import random
 # mudar para random.randint(1, 6) para atender requisito
 NUM_INPUT = 5
 
-URL = "http://localhost:8080/image"
+# 8080 para server java
+# 5000 para server python
+URL = "http://localhost:5000/image"
 
 # mudar para "CGNE" if random.randint(0, 1) == 0 else "CGNR" para atender requisito
-ALGORITHM = "CGNE" if random.randint(0, 1) == 0 else "CGNR"
+ALGORITHM = "CGNE"
 
 TIMEOUT = 180

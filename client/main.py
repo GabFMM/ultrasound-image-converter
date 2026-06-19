@@ -136,4 +136,4 @@ def test():
         print("Servidor demorou demais para responder")
 
 if __name__ == "__main__":
-    mainTest(1, [4, 5, 6])
+    mainTest(1, [4,5,6])
