@@ -52,40 +52,38 @@ def CGNR(signalPath: Path, processResult: ProcessResult):
         print(f"Iteração: {i + 1}")
 
         # pré-cálculo para evitar repetição
-        r_dot_r = np.dot(r, r)
+        r_dot_r = np.dot(r.ravel(), r.ravel())
 
-        alpha = r_dot_r / np.dot(p, p)
+        p_dot_p = np.dot(p.ravel(), p.ravel())
+        alpha = r_dot_r / p_dot_p
 
         f = f + p * alpha
 
         r2 = r - (H @ p) * alpha
 
-        r_dot_r2 = np.dot(r2, r2)
+        r_dot_r2 = np.dot(r2.ravel(), r2.ravel())
         if calcError(r_dot_r2, r_dot_r) < TOLERANCE:
             break
 
-        beta = (np.dot(r2.T, r2)) / r_dot_r
+        beta = np.dot(r2.ravel(), r2.ravel()) / r_dot_r
 
-        r = r2.copy()
+        r = r2
 
         p = (Ht @ r) + (p * beta)
+
+    processResult.numIterations = i + 1
 
     print("Feito CGNR")
     return saveMatrixToTempFile(f)
 
-// Método auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
-    // permitindo que o Controller envie via outputStream.
-    private Path saveMatrixToTempFile(DoubleMatrix matrix) throws IOException {
-        Path tempFile = Files.createTempFile("cgne-result-", ".bin");
-        
-        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(tempFile.toFile()))) {
-            // Escreve cada número da matriz como um dado binário (double - 8 bytes)
-            for (int i = 0; i < matrix.length; i++) {
-                dos.writeDouble(matrix.get(i));
-            }
-        } 
-        return tempFile;
-    }
+# Método auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
+# permitindo que o Controller envie via outputStream.
+def saveMatrixToTempFile(matrix: np.ndarray) -> Path:
+    with tempfile.NamedTemporaryFile(prefix="cgn-result-", suffix=".bin", delete=False) as temp_file:
+        # Copia o conteudo da matrix como double em big-endian para o arquivo temporário
+        matrix.astype(">f8").tofile(temp_file)
+
+        return Path(temp_file.name)
 
 # calcula o valor do erro das iterações dos algoritmos CGNE e CGNR
 def calcError(rNextDotRNext: np.float64, rDotR: np.float64):

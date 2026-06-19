@@ -279,10 +279,10 @@ public class ImageService {
     // Método auxiliar para pegar a matriz resultante e salvar em um arquivo .bin,
     // permitindo que o Controller envie via outputStream.
     private Path saveMatrixToTempFile(DoubleMatrix matrix) throws IOException {
-        Path tempFile = Files.createTempFile("cgne-result-", ".bin");
+        Path tempFile = Files.createTempFile("cgn-result-", ".bin");
         
         try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(tempFile.toFile()))) {
-            // Escreve cada número da matriz como um dado binário (double - 8 bytes)
+            // Escreve cada número da matriz como um dado binário (double - 8 bytes) em big-endian
             for (int i = 0; i < matrix.length; i++) {
                 dos.writeDouble(matrix.get(i));
             }
