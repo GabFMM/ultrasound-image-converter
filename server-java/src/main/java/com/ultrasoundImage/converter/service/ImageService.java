@@ -4,6 +4,9 @@ import com.ultrasoundImage.converter.util.Algorithm;
 import com.ultrasoundImage.converter.util.IntWrapper;
 import com.ultrasoundImage.converter.util.ProcessResult;
 import org.jblas.DoubleMatrix;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
@@ -14,16 +17,16 @@ import java.time.LocalDateTime;
 import java.util.StringTokenizer;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class ImageService {
 
+    @Lazy
+    @Autowired
+    private ImageService self;
+
     // semáforo para evitar queda do servidor
     private final Semaphore semaphore;
-
-    // Cache para guardar as matrizes gigantes na RAM
-    private final ConcurrentHashMap<Integer, DoubleMatrix> modelCache = new ConcurrentHashMap<>();
 
     // Usado no CGNE ou no CGNR
     private final double tolerance;
@@ -37,21 +40,16 @@ public class ImageService {
         maxIterations = 10;
     }
 
-    private DoubleMatrix getModelMatrix(int numH) throws IOException {
-        // Passo A: Verifica se a matriz já está na nossa "prateleira" (Cache)
-        if (modelCache.containsKey(numH)) {
-            System.out.println("Matriz h" + numH + " recuperada instantaneamente do cache");
-            return modelCache.get(numH);
-        }
+    // Essa anotação já lida com condições de corrida
+    @Cacheable("modelMatrix")
+    // Esse método só vai ser chamado em caso de cache miss
+    public DoubleMatrix getModelMatrix(int numH) throws IOException {
 
-        // Passo B: Se não estiver, lê do disco (operação lenta)
-        System.out.println("Matriz h" + numH + " não encontrada no cache. Lendo do disco pela primeira vez...");
-        DoubleMatrix H = new DoubleMatrix(readCSV(Path.of("data/h" + numH + ".csv")));
-        
-        // Passo C: Salva na prateleira para as próximas requisições não precisarem esperar
-        modelCache.put(numH, H);
-        
-        return H;
+        System.out.println("Lendo matriz H" + numH + " do disco...");
+
+        return new DoubleMatrix(
+                readCSV(Path.of("data/h" + numH + ".csv"))
+        );
     }
 
     // There is no risk of races,
@@ -169,8 +167,9 @@ public class ImageService {
     private Path CGNR(Path signalPath, int numH, IntWrapper intWrapper) throws IOException {
         System.out.println("Iniciado CGNR");
 
-        // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = getModelMatrix(numH);
+        // Carregar a Matriz de Modelo (H), usando o proxy para funcionar o cache
+        // O uso do self força o spring a passar pelo proxy
+        DoubleMatrix H = self.getModelMatrix(numH);
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
@@ -217,8 +216,9 @@ public class ImageService {
     private Path CGNE(Path signalPath, int numH, IntWrapper intWrapper) throws IOException {
         System.out.println("Iniciado CGNE");
 
-        // Carregar a Matriz de Modelo (H): usando o CSV original
-        DoubleMatrix H = getModelMatrix(numH);
+        // Carregar a Matriz de Modelo (H), usando o proxy para funcionar o cache
+        // O uso do self força o spring a passar pelo proxy
+        DoubleMatrix H = self.getModelMatrix(numH);
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
@@ -372,7 +372,7 @@ public class ImageService {
             processResult.setWidthPixels(60);
             processResult.setHeightPixels(60);
         }
-        else if(numH == 2) {
+        else { // numH == 2
             processResult.setWidthPixels(30);
             processResult.setHeightPixels(30);
         }
