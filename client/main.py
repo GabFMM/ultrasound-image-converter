@@ -4,27 +4,18 @@ from pathlib import Path
 import numpy as np
 import threading
 import random
+import uuid
 
 import matplotlib
 matplotlib.use('Agg') # 'Agg' é o backend que só salva arquivos, não abre janelas
 import matplotlib.pyplot as plt
 
-# retorna um nome de arquivo unico
-# evita sobreescrever arquivos existentes 
-def getFilename(numInput: int) -> str:
-    attempts = 0
+# retorna um nome de arquivo unico com UUID
+# evita sobreescrever arquivos existentes
+def getFilename(numInput):
+    Path("output").mkdir(exist_ok=True)
 
-    name = f"output/image-from-G-{numInput}"
-    ext = ".jpg"
-    path = Path(name + ext)
-
-    while path.is_file():
-        attempts += 1
-        path = Path(f"{name}({attempts}){ext}")
-
-    # cria a pasta output se nao existir
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path.as_posix()
+    return f"output/image-from-G-{numInput}-{uuid.uuid4().hex}.jpg"
 
 # numInput determina qual arquivo de dados usar
 def sendRequest(algorithm: str, numInput: int, timeout: int) -> requests.Response:
@@ -45,7 +36,7 @@ def sendRequest(algorithm: str, numInput: int, timeout: int) -> requests.Respons
         timeout=timeout
     )
 
-def generateImage(response: requests.Response, numInput: int):
+def generateImage(response: requests.Response, algorithm: str, numInput: int):
     # recuperar Altura/Largura
     height = response.headers.get("height-pixels")
     width = response.headers.get("width-pixels")
@@ -62,7 +53,7 @@ def generateImage(response: requests.Response, numInput: int):
 
     # configurar o Plot de Alta Resolução (Matplotlib)
     fig, ax = plt.subplots(figsize=(6, 6), dpi=100) # Cria uma figura quadrada decente
-    ax.set_title(f"Reconstrução G-{numInput}")
+    ax.set_title(f"Reconstrução G-{numInput} com {algorithm}")
 
     # mostrar imagem 
     # interpolation='bicubic'suaviza os pixels 60x60
@@ -74,8 +65,9 @@ def generateImage(response: requests.Response, numInput: int):
 
     # salvar a figura no disco
     filename = getFilename(numInput) 
-    plt.savefig(filename, dpi=150, bbox_inches='tight')
-    plt.close(fig) # fecha a figura para não ocupar memória
+    fig.savefig(filename, dpi=150, bbox_inches='tight')
+    fig.clear()
+    plt.close(fig)
 
     print(f"-> Imagem de alta qualidade (suavizada) salva em: {filename}")
 
@@ -98,13 +90,20 @@ def mainTest(numThreads: int, numInputs: list[int]):
 
                 response = sendRequest(algorithm, input, TIMEOUT)
             
-                generateImage(response, input)
+                generateImage(response, algorithm, input)
 
                 showMainInfos(response, input)
 
+        threads = []
+
         for _ in range(numThreads):
             thread = threading.Thread(target=fun)
-            thread.start()        
+            thread.start()
+            threads.append(thread)
+
+        # bloqueia a thread principal de acabar antes da finalização das threads de requisição
+        for thread in threads:
+            thread.join()
 
     except(requests.exceptions.Timeout):
         print("Servidor demorou demais para responder")
@@ -114,12 +113,12 @@ def test():
     try:
         response = sendRequest(ALGORITHM, NUM_INPUT, TIMEOUT)
     
-        generateImage(response, NUM_INPUT)
+        generateImage(response, ALGORITHM, NUM_INPUT)
 
-        showMainInfos(response, NUM_INPUT)       
+        showMainInfos(response, NUM_INPUT)      
 
     except(requests.exceptions.Timeout):
         print("Servidor demorou demais para responder")
 
 if __name__ == "__main__":
-    mainTest(2, [1, 2, 3, 4, 5, 6])
+    mainTest(3, [1, 2, 3, 4, 5, 6])

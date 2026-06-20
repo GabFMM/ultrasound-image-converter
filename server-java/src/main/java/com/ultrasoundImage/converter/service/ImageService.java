@@ -41,7 +41,9 @@ public class ImageService {
     }
 
     // Essa anotação já lida com condições de corrida
-    @Cacheable("modelMatrix")
+    // o sync = true determina que, para cache miss ao mesmo tempo (ou próximo),
+    // só uma das threads poderá ler o arquivo. Isso evita I/O desnecessário
+    @Cacheable(value = "modelMatrix", sync = true)
     // Esse método só vai ser chamado em caso de cache miss
     public DoubleMatrix getModelMatrix(int numH) throws IOException {
 
@@ -165,11 +167,12 @@ public class ImageService {
     }
 
     private Path CGNR(Path signalPath, int numH, IntWrapper intWrapper) throws IOException {
-        System.out.println("Iniciado CGNR");
-
         // Carregar a Matriz de Modelo (H), usando o proxy para funcionar o cache
         // O uso do self força o spring a passar pelo proxy
         DoubleMatrix H = self.getModelMatrix(numH);
+
+        // print depois da inicialização do H por legibilidade no terminal
+        System.out.println("Iniciado CGNR");
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));
@@ -214,11 +217,12 @@ public class ImageService {
     }
 
     private Path CGNE(Path signalPath, int numH, IntWrapper intWrapper) throws IOException {
-        System.out.println("Iniciado CGNE");
-
         // Carregar a Matriz de Modelo (H), usando o proxy para funcionar o cache
         // O uso do self força o spring a passar pelo proxy
         DoubleMatrix H = self.getModelMatrix(numH);
+
+        // print depois da inicialização do H por legibilidade no terminal
+        System.out.println("Iniciado CGNE");
 
         // Carregar o Vetor de Sinal (g)
         DoubleMatrix g = new DoubleMatrix(readBinaryVector(signalPath));

@@ -24,7 +24,7 @@ public class CacheConfig {
                         .maximumSize(2)
                         // Esse temporizador é reiniciado a cada acesso de uma matriz
                         // Caso chegue a 0, então a matriz é removida do cache
-                        .expireAfterAccess(Duration.ofMinutes(2))
+                        .expireAfterAccess(Duration.ofMinutes(1))
         );
 
         return manager;
