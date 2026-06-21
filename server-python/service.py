@@ -1,5 +1,6 @@
 from processResult import ProcessResult
 from constants import *
+from appConfig import cache
 
 import tempfile
 import threading
@@ -8,9 +9,48 @@ import numpy as np
 from datetime import datetime
 from typing import Literal
 from pathlib import Path
+from collections import defaultdict
 
 # cria um semaforo que permite duas threads "acessa-lo"
 semaphore = threading.BoundedSemaphore(value=2)
+
+# obtêm um dicionário de locks para o cache
+locks = defaultdict(threading.Lock)
+
+# Lê uma matrix modelo H do cache
+# Esse cache possui:
+# tempo de expiração (2 minutos), é thread-safe e possui cache stampede protection
+def cachedMatrix(numH: int):
+    key = f"matrix:{numH}"
+
+    value = cache.get(key)
+
+    # cache hit
+    if value is not None:
+        print(f"Matrix H{numH} recuperada do cache")
+        return value
+
+    # cache miss
+    # obtêm lock para cache stampede protection
+    lock = locks[key]
+    with lock:
+
+        # outra thread pode ter preenchido o cache
+        # enquanto esperava o lock
+        value = cache.get(key)
+
+        # cache hit
+        if value is not None:
+            print(f"Matrix H{numH} recuperada do cache")
+            return value
+
+        # cache miss
+        print(f"Matrix H{numH} não está no cache")
+        value = readCSV(Path(f"data/h{numH}.csv"))
+
+        cache.set(key, value)
+
+        return value
 
 def readCSV(path: Path) -> np.ndarray:
     print(f"Início da leitura de {path}")
@@ -62,7 +102,7 @@ def CGNE(signalPath: Path, numH: int, processResult: ProcessResult):
     print("Iniciado CGNE")
 
     # carrega a Matriz de Modelo
-    H = readCSV(Path(f"data/h{numH}.csv"))
+    H = cachedMatrix(numH)
 
     # carrega o Vetor de Sinal (g)
     g = readBinaryVector(signalPath)
@@ -116,7 +156,7 @@ def CGNR(signalPath: Path, numH: int, processResult: ProcessResult):
     print("Iniciado CGNR")
 
     # Carregar a Matriz de Modelo (H): usando o CSV original
-    H = readCSV(Path(f"data/h{numH}.csv"))
+    H = cachedMatrix(numH)
 
     # Carregar o Vetor de Sinal (g)
     g = readBinaryVector(signalPath)

@@ -1,8 +1,7 @@
-from flask import Flask, request, Response, jsonify, send_file, after_this_request
+from flask import request, Response, jsonify, send_file, after_this_request
 
 import service
-
-app = Flask(__name__)
+from appConfig import app
 
 @app.route("/image", methods=["POST"])
 def process():

@@ -84,7 +84,7 @@ pip install -r requirements.txt
 5. Run the server:
 
 ```
-flask --app controller run
+python3 main.py
 ```
 
 ## Running the Java Server
