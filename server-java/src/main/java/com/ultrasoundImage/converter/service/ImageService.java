@@ -328,6 +328,11 @@ public class ImageService {
         return bean.getThreadAllocatedBytes(tid);
     }
 
+    private long getThreadCPUTime(){
+        ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+        return bean.getCurrentThreadCpuTime();
+    }
+
     public void toOutputStream(Path path, OutputStream outputStream) throws IOException{
         if(path == null)
             return;
@@ -371,7 +376,8 @@ public class ImageService {
 
         processResult.setAlgorithm(algorithm);
         processResult.setStartDateTime(LocalDateTime.now());
-        processResult.setInitiallyAllocatedMemory(getThreadAllocatedMemory());
+        processResult.setInitialAllocatedMemory(getThreadAllocatedMemory());
+        processResult.setInitialCPUTime(getThreadCPUTime());
 
         int numH;
         if(numInput >= 1 && numInput <= 3)
@@ -429,6 +435,7 @@ public class ImageService {
             deleteTempFile(signalPath);
         }
 
+        processResult.setFinalCPUTime(getThreadCPUTime());
         processResult.setFinalAllocatedMemory(getThreadAllocatedMemory());
         processResult.setEndDateTime(LocalDateTime.now());
         return processResult;

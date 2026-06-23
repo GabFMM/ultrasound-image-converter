@@ -5,6 +5,7 @@ import numpy as np
 import threading
 import random
 import uuid
+from datetime import datetime
 
 import matplotlib
 matplotlib.use('Agg') # 'Agg' é o backend que só salva arquivos, não abre janelas
@@ -72,18 +73,26 @@ def generateImage(response: requests.Response, algorithm: str, numInput: int):
     print(f"-> Imagem de alta qualidade (suavizada) salva em: {filename}")
 
 def showMainInfos(response: requests.Response, numInput: int):
+    # preparação para os prints
+    format = "%d/%m/%Y %H:%M:%S.%f"
+    initial = datetime.strptime(response.headers.get("start-time"), format)
+    end = datetime.strptime(response.headers.get("end-time"), format)
+    totalTime = end - initial
+
     print(f"Arquivo de dados G-{numInput}:")
     print("-> Algoritmo:", response.headers.get("Algorithm"))
     print("-> Iterações:", response.headers.get("num-iterations"))
     print("-> Início:", response.headers.get("start-time"))
     print("-> Fim:", response.headers.get("end-time"))
+    print(f"-> Tempo total: {totalTime.total_seconds():.3f}s")
+    print(f"-> Tempo de CPU: {response.headers.get('cpu-time')}s")
     print(f"-> Memória alocada: {response.headers.get('allocated-memory')}MB")
     print("-> Altura:", response.headers.get("height-pixels"))
     print("-> Largura:", response.headers.get("width-pixels"))
     print("=" * 40)
 
 # Para teste de carga do servidor
-def mainTest(numThreads: int, numInputs: list[int]):
+def test(numThreads: int, numInputs: list[int]):
     try:
         def fun():
             for input in numInputs:
@@ -109,17 +118,5 @@ def mainTest(numThreads: int, numInputs: list[int]):
     except(requests.exceptions.Timeout):
         print("Servidor demorou demais para responder")
 
-# Apenas para desenvolvimento
-def test():
-    try:
-        response = sendRequest(ALGORITHM, NUM_INPUT, TIMEOUT)
-    
-        generateImage(response, ALGORITHM, NUM_INPUT)
-
-        showMainInfos(response, NUM_INPUT)      
-
-    except(requests.exceptions.Timeout):
-        print("Servidor demorou demais para responder")
-
 if __name__ == "__main__":
-    mainTest(2, [1, 2, 3, 4, 5, 6])
+    test(2, [4, 5, 6])

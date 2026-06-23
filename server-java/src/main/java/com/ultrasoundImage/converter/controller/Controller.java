@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
 @RestController
@@ -26,12 +27,12 @@ public class Controller {
 
         response.setHeader(
                 "start-time",
-                processResult.getStartDateTime().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"))
+                processResult.getStartDateTime().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss.SSS"))
         );
 
         response.setHeader(
                 "end-time",
-                processResult.getEndDateTime().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"))
+                processResult.getEndDateTime().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss.SSS"))
         );
 
         response.setHeader(
@@ -49,11 +50,20 @@ public class Controller {
                 Integer.toString(processResult.getNumIterations())
         );
 
-        long initial = processResult.getInitiallyAllocatedMemory();
+        long initial = processResult.getInitialAllocatedMemory();
         long end = processResult.getFinalAllocatedMemory();
         response.setHeader(
                 "allocated-memory",
+                // transforma bytes em MB
                 Long.toString((long)((end - initial) / 1e+6))
+        );
+
+        initial = processResult.getInitialCPUTime();
+        end = processResult.getFinalCPUTime();
+        response.setHeader(
+                "cpu-time",
+                // transforma ns em s
+                String.format(Locale.US, "%.3f", (end - initial) / 1e+9)
         );
     }
 

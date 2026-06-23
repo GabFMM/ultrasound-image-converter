@@ -10,8 +10,11 @@ public class ProcessResult {
     private int heightPixels;
     private int numIterations;
     // em bytes
-    private long initiallyAllocatedMemory;
+    private long initialAllocatedMemory;
     private long finalAllocatedMemory;
+    // em ms
+    private long initialCPUTime;
+    private long finalCPUTime;
 
     public ProcessResult(){
         algorithm = null;
@@ -20,6 +23,10 @@ public class ProcessResult {
         widthPixels = 0;
         heightPixels = 0;
         numIterations = 0;
+        initialAllocatedMemory = 0;
+        finalAllocatedMemory = 0;
+        initialCPUTime = 0;
+        finalCPUTime = 0;
     }
 
     public Algorithm getAlgorithm() {
@@ -74,15 +81,31 @@ public class ProcessResult {
         return finalAllocatedMemory;
     }
 
-    public long getInitiallyAllocatedMemory() {
-        return initiallyAllocatedMemory;
+    public long getInitialAllocatedMemory() {
+        return initialAllocatedMemory;
     }
 
-    public void setInitiallyAllocatedMemory(long initiallyAllocatedMemory) {
-        this.initiallyAllocatedMemory = initiallyAllocatedMemory;
+    public void setInitialAllocatedMemory(long initialAllocatedMemory) {
+        this.initialAllocatedMemory = initialAllocatedMemory;
     }
 
     public void setFinalAllocatedMemory(long finalAllocatedMemory) {
         this.finalAllocatedMemory = finalAllocatedMemory;
+    }
+
+    public long getFinalCPUTime() {
+        return finalCPUTime;
+    }
+
+    public long getInitialCPUTime() {
+        return initialCPUTime;
+    }
+
+    public void setFinalCPUTime(long finalCPUTime) {
+        this.finalCPUTime = finalCPUTime;
+    }
+
+    public void setInitialCPUTime(long initialCPUTime) {
+        this.initialCPUTime = initialCPUTime;
     }
 }
