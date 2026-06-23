@@ -1,5 +1,6 @@
 package com.ultrasoundImage.converter.service;
 
+import com.sun.management.ThreadMXBean;
 import com.ultrasoundImage.converter.util.Algorithm;
 import com.ultrasoundImage.converter.util.IntWrapper;
 import com.ultrasoundImage.converter.util.ProcessResult;
@@ -10,6 +11,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -320,6 +322,12 @@ public class ImageService {
         return tempFile;
     }
 
+    private long getThreadAllocatedMemory(){
+        ThreadMXBean bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
+        long tid = Thread.currentThread().threadId();
+        return bean.getThreadAllocatedBytes(tid);
+    }
+
     public void toOutputStream(Path path, OutputStream outputStream) throws IOException{
         if(path == null)
             return;
@@ -363,6 +371,7 @@ public class ImageService {
 
         processResult.setAlgorithm(algorithm);
         processResult.setStartDateTime(LocalDateTime.now());
+        processResult.setInitiallyAllocatedMemory(getThreadAllocatedMemory());
 
         int numH;
         if(numInput >= 1 && numInput <= 3)
@@ -420,6 +429,7 @@ public class ImageService {
             deleteTempFile(signalPath);
         }
 
+        processResult.setFinalAllocatedMemory(getThreadAllocatedMemory());
         processResult.setEndDateTime(LocalDateTime.now());
         return processResult;
     }

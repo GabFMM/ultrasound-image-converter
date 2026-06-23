@@ -9,6 +9,9 @@ public class ProcessResult {
     private int widthPixels;
     private int heightPixels;
     private int numIterations;
+    // em bytes
+    private long initiallyAllocatedMemory;
+    private long finalAllocatedMemory;
 
     public ProcessResult(){
         algorithm = null;
@@ -65,5 +68,21 @@ public class ProcessResult {
 
     public void setNumIterations(int numIterations) {
         this.numIterations = numIterations;
+    }
+
+    public long getFinalAllocatedMemory() {
+        return finalAllocatedMemory;
+    }
+
+    public long getInitiallyAllocatedMemory() {
+        return initiallyAllocatedMemory;
+    }
+
+    public void setInitiallyAllocatedMemory(long initiallyAllocatedMemory) {
+        this.initiallyAllocatedMemory = initiallyAllocatedMemory;
+    }
+
+    public void setFinalAllocatedMemory(long finalAllocatedMemory) {
+        this.finalAllocatedMemory = finalAllocatedMemory;
     }
 }

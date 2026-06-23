@@ -18,32 +18,7 @@ public class Controller {
 
     private final ImageService imageService;
 
-    public Controller(ImageService imageService){
-        this.imageService = imageService;
-    }
-
-    @PostMapping(value = "/image", consumes = "application/octet-stream")
-    public void process(
-            @RequestParam Algorithm algorithm,
-            @RequestParam("num-input") int numInput,
-            HttpServletRequest request,
-            HttpServletResponse response
-    ) throws IOException
-    {
-        response.setHeader(
-                "Content-Disposition",
-                "attachment; filename=result.bin"
-        );
-        response.setContentType("application/octet-stream");
-
-        AtomicReference<Path> outputPath = new AtomicReference<>(null);
-        ProcessResult processResult = imageService.process(
-                algorithm,
-                numInput,
-                request.getInputStream(),
-                outputPath
-        );
-
+    private void setHeaders(HttpServletResponse response, ProcessResult processResult){
         response.setHeader(
                 "Algorithm",
                 processResult.getAlgorithm().getDescription()
@@ -73,6 +48,42 @@ public class Controller {
                 "num-iterations",
                 Integer.toString(processResult.getNumIterations())
         );
+
+        long initial = processResult.getInitiallyAllocatedMemory();
+        long end = processResult.getFinalAllocatedMemory();
+        response.setHeader(
+                "allocated-memory",
+                Long.toString((long)((end - initial) / 1e+6))
+        );
+    }
+
+    public Controller(ImageService imageService){
+        this.imageService = imageService;
+    }
+
+    @PostMapping(value = "/image", consumes = "application/octet-stream")
+    public void process(
+            @RequestParam Algorithm algorithm,
+            @RequestParam("num-input") int numInput,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) throws IOException
+    {
+        response.setHeader(
+                "Content-Disposition",
+                "attachment; filename=result.bin"
+        );
+        response.setContentType("application/octet-stream");
+
+        AtomicReference<Path> outputPath = new AtomicReference<>(null);
+        ProcessResult processResult = imageService.process(
+                algorithm,
+                numInput,
+                request.getInputStream(),
+                outputPath
+        );
+
+        setHeaders(response, processResult);
 
         try {
             imageService.toOutputStream(outputPath.get(), response.getOutputStream());

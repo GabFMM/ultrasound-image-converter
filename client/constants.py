@@ -4,9 +4,9 @@ NUM_INPUT = 1
 
 # 8080 para server java
 # 5000 para server python
-URL = "http://localhost:5000/image"
+URL = "http://localhost:8080/image"
 
 # mudar para "CGNE" if random.randint(0, 1) == 0 else "CGNR" para atender requisito
 ALGORITHM = "CGNR"
 
-TIMEOUT = 120
+TIMEOUT = 180

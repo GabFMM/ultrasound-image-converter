@@ -77,6 +77,7 @@ def showMainInfos(response: requests.Response, numInput: int):
     print("-> Iterações:", response.headers.get("num-iterations"))
     print("-> Início:", response.headers.get("start-time"))
     print("-> Fim:", response.headers.get("end-time"))
+    print(f"-> Memória alocada: {response.headers.get('allocated-memory')}MB")
     print("-> Altura:", response.headers.get("height-pixels"))
     print("-> Largura:", response.headers.get("width-pixels"))
     print("=" * 40)
@@ -121,4 +122,4 @@ def test():
         print("Servidor demorou demais para responder")
 
 if __name__ == "__main__":
-    mainTest(1, [1, 2, 3, 4, 5, 6])
+    mainTest(2, [1, 2, 3, 4, 5, 6])
