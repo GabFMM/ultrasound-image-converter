@@ -25,12 +25,12 @@ def process():
     if processResult.startDateTime is None:
         startDateTime = "Error"
     else:
-        startDateTime = processResult.startDateTime.strftime("%d/%m/%Y %H:%M:%S")
+        startDateTime = processResult.startDateTime.strftime("%d/%m/%Y %H:%M:%S.%f")[:-3]
 
     if processResult.endDateTime is None:
         endDateTime = "Error"
     else:
-        endDateTime = processResult.endDateTime.strftime("%d/%m/%Y %H:%M:%S")
+        endDateTime = processResult.endDateTime.strftime("%d/%m/%Y %H:%M:%S.%f")[:-3]
 
     headers = {
         "algorithm": processResult.algorithm,

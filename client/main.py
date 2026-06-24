@@ -1,22 +1,13 @@
-from constants import *
 import requests
-from pathlib import Path
 import numpy as np
 import threading
 import random
-import uuid
+import time
 from datetime import datetime
 
-import matplotlib
-matplotlib.use('Agg') # 'Agg' é o backend que só salva arquivos, não abre janelas
-import matplotlib.pyplot as plt
-
-# retorna um nome de arquivo unico com UUID
-# evita sobreescrever arquivos existentes
-def getFilename(numInput):
-    Path("output").mkdir(exist_ok=True)
-
-    return f"output/image-from-G-{numInput}-{uuid.uuid4().hex}.jpg"
+from constants import *
+from file import deleteFile, updateResultsCSV, createPDF, generateImage
+from data import createTablesAndGraphics
 
 # numInput determina qual arquivo de dados usar
 def sendRequest(algorithm: str, numInput: int, timeout: int) -> requests.Response:
@@ -26,6 +17,8 @@ def sendRequest(algorithm: str, numInput: int, timeout: int) -> requests.Respons
     }
 
     g = np.loadtxt(f"input/G-{numInput}.csv", delimiter=",")
+
+    print(f"Feita requisição com algoritmo {algorithm} e com o arquivo de dados G{numInput}")
 
     return requests.post(
         URL,
@@ -37,49 +30,16 @@ def sendRequest(algorithm: str, numInput: int, timeout: int) -> requests.Respons
         timeout=timeout
     )
 
-def generateImage(response: requests.Response, algorithm: str, numInput: int):
-    # recuperar Altura/Largura
-    height = response.headers.get("height-pixels")
-    width = response.headers.get("width-pixels")
-
-    if not height or not width:
-        print("Altura ou largura são inválidos e são None")
-        return
-
-    height, width = int(height), int(width)
-
-    # recuperar matriz binária (mantenha a lógica Column-Major que desvira a imagem)
-    img = np.frombuffer(response.content, dtype=">f8")
-    img = img.reshape((height, width), order='F')
-
-    # configurar o Plot de Alta Resolução (Matplotlib)
-    fig, ax = plt.subplots(figsize=(6, 6), dpi=100) # Cria uma figura quadrada decente
-    ax.set_title(f"Reconstrução G-{numInput} com {algorithm}")
-
-    # mostrar imagem 
-    # interpolation='bicubic'suaviza os pixels 60x60
-    im = ax.imshow(img, cmap='gray', interpolation='nearest', extent=[1, width, height, 1])
-
-    # eixos 
-    ax.set_xticks(np.arange(10, width + 1, 10))
-    ax.set_yticks(np.arange(10, height + 1, 10))
-
-    # salvar a figura no disco
-    filename = getFilename(numInput) 
-    fig.savefig(filename, dpi=150, bbox_inches='tight')
-    fig.clear()
-    plt.close(fig)
-
-    print(f"-> Imagem de alta qualidade (suavizada) salva em: {filename}")
-
-def showMainInfos(response: requests.Response, numInput: int):
+def showMainInfos(response: requests.Response, numInput: int, imageFilename: str):
     # preparação para os prints
     format = "%d/%m/%Y %H:%M:%S.%f"
     initial = datetime.strptime(response.headers.get("start-time"), format)
     end = datetime.strptime(response.headers.get("end-time"), format)
     totalTime = end - initial
 
+    # prints
     print(f"Arquivo de dados G-{numInput}:")
+    print(f"-> Nome da imagem: {imageFilename}")
     print("-> Algoritmo:", response.headers.get("Algorithm"))
     print("-> Iterações:", response.headers.get("num-iterations"))
     print("-> Início:", response.headers.get("start-time"))
@@ -100,9 +60,9 @@ def test(numThreads: int, numInputs: list[int]):
 
                 response = sendRequest(algorithm, input, TIMEOUT)
             
-                generateImage(response, algorithm, input)
+                imageFilename = generateImage(response, algorithm, input)
 
-                showMainInfos(response, input)
+                showMainInfos(response, input, imageFilename)
 
         threads = []
 
@@ -118,5 +78,41 @@ def test(numThreads: int, numInputs: list[int]):
     except(requests.exceptions.Timeout):
         print("Servidor demorou demais para responder")
 
+# o numThreads determina quantas requisições serão feitas (1 thread por requisição)
+# o overwrite indicará se o relatório final deve ser sobreescrito ou reusado
+def main(numThreads: int, overwrite: bool):
+    def fun():
+        algorithm = "CGNE" if random.randint(0, 1) == 0 else "CGNR"
+
+        input = random.randint(1, 6)
+
+        response = sendRequest(algorithm, input, TIMEOUT)
+    
+        imageFilename = generateImage(response, algorithm, input)
+
+        showMainInfos(response, input, imageFilename)
+
+        updateResultsCSV(response, imageFilename)
+
+    if overwrite:
+        deleteFile("output/results.csv")
+
+    threads = []
+
+    for _ in range(numThreads):
+        thread = threading.Thread(target=fun)
+        thread.start()
+
+        threads.append(thread)
+
+        time.sleep(random.uniform(0, 10))
+
+    # evita do programa terminar antes das threads terminarem de executar
+    for thread in threads:
+        thread.join()
+
+    createTablesAndGraphics()
+    createPDF()
+
 if __name__ == "__main__":
-    test(2, [4, 5, 6])
+    main(5, False)
