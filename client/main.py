@@ -95,7 +95,7 @@ def main(numThreads: int, overwrite: bool):
         updateResultsCSV(response, imageFilename)
 
     if overwrite:
-        deleteFile("output/results.csv")
+        deleteFile("data/results.csv")
 
     threads = []
 
@@ -115,4 +115,4 @@ def main(numThreads: int, overwrite: bool):
     createPDF()
 
 if __name__ == "__main__":
-    main(5, False)
+    main(5, True)

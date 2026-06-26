@@ -1,5 +1,6 @@
 package com.ultrasoundImage.converter.service;
 
+import com.sun.management.OperatingSystemMXBean;
 import com.sun.management.ThreadMXBean;
 import com.ultrasoundImage.converter.util.Algorithm;
 import com.ultrasoundImage.converter.util.IntWrapper;
@@ -9,6 +10,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import oshi.SystemInfo;
+import oshi.hardware.GlobalMemory;
+import oshi.software.os.OSProcess;
+import oshi.software.os.OperatingSystem;
 
 import java.io.*;
 import java.lang.management.ManagementFactory;
@@ -29,17 +34,60 @@ public class ImageService {
 
     // semáforo para evitar queda do servidor
     private final Semaphore semaphore;
+    private final int[] inputWeights;
 
     // Usado no CGNE ou no CGNR
     private final double tolerance;
     private final int maxIterations;
 
+    private static final OperatingSystemMXBean osBean =
+            (OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
+
+    private static final SystemInfo si = new SystemInfo();
+    private static final OperatingSystem os = si.getOperatingSystem();
+    private static final GlobalMemory memory = si.getHardware().getMemory();
+
     public ImageService(){
-        // mudar para mais ou para menos, porém é manual
-        semaphore = new Semaphore(2);
+        semaphore = new Semaphore(getSemaphoreCapacity(), true);
+        inputWeights = new int[2];
+        inputWeights[0] = 7; // para os inputs 1 a 3
+        inputWeights[1] = 1; // para os inputs 4 a 6
 
         tolerance = 1e-4;
         maxIterations = 10;
+    }
+
+    public static double getProcessCpuUsage() {
+        double load = osBean.getProcessCpuLoad(); // 0.0 a 1.0
+
+        if (load < 0) return 0.0; // pode retornar -1 se ainda não inicializou
+
+        return load * 100.0;
+    }
+
+    public static double getProcessRamPercent() {
+
+        Runtime runtime = Runtime.getRuntime();
+
+        long used = runtime.totalMemory() - runtime.freeMemory();
+
+        long max = runtime.maxMemory();
+
+        return used * 100.0 / max;
+    }
+
+    private boolean allowGate(){
+        return 80.f > getProcessRamPercent() && 80.f > getProcessCpuUsage();
+    }
+
+    private int getSemaphoreCapacity(){
+        Runtime runtime = Runtime.getRuntime();
+        // limite do heap (-Xmx) em MB
+        long maxMemory = runtime.maxMemory() / (1024 * 1024);
+
+        // capacidade do semáforo levando em conta o pior caso (3 GB)
+        // * 7, pois o pior caso precisa de 7 permissões
+        return (int)(maxMemory / (3 * 1024)) * 7;
     }
 
     // Essa anotação já lida com condições de corrida
@@ -379,11 +427,16 @@ public class ImageService {
         processResult.setInitialAllocatedMemory(getThreadAllocatedMemory());
         processResult.setInitialCPUTime(getThreadCPUTime());
 
+        int inputWeight = 0; // usado no semáforo
         int numH;
-        if(numInput >= 1 && numInput <= 3)
+        if(numInput >= 1 && numInput <= 3) {
             numH = 1;
-        else if(numInput >= 4 && numInput <= 6)
+            inputWeight = inputWeights[0];
+        }
+        else if(numInput >= 4 && numInput <= 6) {
             numH = 2;
+            inputWeight = inputWeights[1];
+        }
         else
             throw new RuntimeException("numInput inválido");
 
@@ -405,12 +458,22 @@ public class ImageService {
             // Salva o arquivo de entrada recebido do cliente
             inputPath = createTempFile(input);
 
-            // Aplica o ganho de sinal (gera o primeiro arquivo temporário intermediário)
-            signalPath = signalGain(inputPath, numH);
+            // 1. GATE DE ADMISSÃO (CPU/RAM)
+            while (!allowGate()) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return new ProcessResult();
+                }
+            }
 
-            // uso semáforo para evitar a queda do servidor
+            // semáforo para evitar a queda do servidor
             try{
-                semaphore.acquire();
+                semaphore.acquire(inputWeight);
+
+                // Aplica o ganho de sinal (gera o primeiro arquivo temporário intermediário)
+                signalPath = signalGain(inputPath, numH);
 
                 // Aplica o algoritmo de reconstrução (gera o arquivo temporário final)
                 if (algorithm == Algorithm.CGNE) {
@@ -424,7 +487,7 @@ public class ImageService {
                 throw new RuntimeException("uma thread foi interrupta");
             }
             finally {
-                semaphore.release();
+                semaphore.release(inputWeight);
             }
 
             processResult.setNumIterations(intWrapper.getNum());
