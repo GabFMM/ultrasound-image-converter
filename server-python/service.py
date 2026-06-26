@@ -219,8 +219,7 @@ def calcError(rNextDotRNext: np.float64, rDotR: np.float64):
     # return epsilon
     return abs(normaRProximo - normaRAtual)
 
-# There is no risk of races,
-# as createTempFile generates a single file per client
+# createTempFile generates a single file per client
 # returns the temp file path
 def createTempFile(input_stream: bytes) -> Path:
     with tempfile.NamedTemporaryFile(prefix="upload-", suffix=".bin", delete=False) as temp_file:
@@ -272,7 +271,6 @@ def process(algorithm: Literal["CGNE", "CGNR"], numInput: int, inputData: bytes)
     return processResult
 
 # LÓGICA DE MULTIPROCESSAMENTO (ISOLAMENTO DE MEMÓRIA E BYPASS DO GIL)
-
 # fábrica de processos paralelos (iniciada apenas quando necessário)
 executor_pesado = None
 executor_leve = None
