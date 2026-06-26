@@ -310,21 +310,30 @@ def get_executors():
 
 # operário isolado (roda em um processo limpo do SO)
 def worker_isolado(algorithm, numInput, raw_data):
-    # liga o monitor APENAS para este processo (livre de concorrência)
-    tracemalloc.start()
+    # pega a "ficha" do processo atual no Sistema Operacional
+    p = psutil.Process(os.getpid())
+    
+    # anota quanto de RAM física (RSS) este trabalhador está gastando ANTES de começar
+    rss_antes = p.memory_info().rss
+    
     cpu_start_time = time.process_time()
 
-    # chama a sua função original de matemática que já existe neste arquivo
+    # chama a matemática
     resultado = process(algorithm, numInput, raw_data)
 
     cpu_end_time = time.process_time()
     cpu_time_sec = cpu_end_time - cpu_start_time
 
-    # tira a "foto" da memória consumida no pico e desliga o monitor
-    current_mem, peak_mem = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
+    # anota o RSS logo DEPOIS da conta (com as matrizes pesadas ainda vivas na memória)
+    rss_depois = p.memory_info().rss
     
-    ram_mb = peak_mem / (1024 * 1024)
+    # a diferença é a quantidade exata de RAM que a imagem consumiu para ser gerada
+    mem_usada_bytes = max(0, rss_depois - rss_antes)
+    ram_mb = mem_usada_bytes / (1024 * 1024)
+    
+    # segurança: se o Garbage Collector limpou tudo muito rápido, pega o tamanho da imagem gerada
+    if ram_mb < 1.0: 
+        ram_mb = rss_depois / (1024 * 1024)
 
-    # devolve o pacote completo (Imagem + Estatísticas Exatas) pro Flask
+    # devolve o pacote completo (Imagem + Estatísticas Físicas) pro Flask
     return resultado, cpu_time_sec, ram_mb
