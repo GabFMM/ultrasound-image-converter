@@ -10,9 +10,11 @@ from datetime import datetime
 from typing import Literal
 from pathlib import Path
 from collections import defaultdict
-
-# cria um semaforo que permite duas threads "acessa-lo"
-semaphore = threading.BoundedSemaphore(value=2)
+import os
+import psutil
+import time
+import tracemalloc
+from concurrent.futures import ProcessPoolExecutor
 
 # obtêm um dicionário de locks para o cache
 locks = defaultdict(threading.Lock)
@@ -255,14 +257,11 @@ def process(algorithm: Literal["CGNE", "CGNR"], numInput: int, inputData: bytes)
         # Aplica o ganho de sinal (gera o primeiro arquivo temporário intermediário)
         signalPath = signalGain(inputPath, numH)
 
-        # Usa semaforo para evitar queda do servidor
-        with semaphore:
-            
-            # Aplica o algoritmo de reconstrução (gera o arquivo temporário final)
-            if algorithm == "CGNE":
-                CGNE(signalPath, numH, processResult)
-            elif algorithm == "CGNR":
-                CGNR(signalPath, numH, processResult)
+        # Aplica o algoritmo de reconstrução (gera o arquivo temporário final)
+        if algorithm == "CGNE":
+            CGNE(signalPath, numH, processResult)
+        elif algorithm == "CGNR":
+            CGNR(signalPath, numH, processResult)
 
     finally:
         # apaga os arquivos temporários
@@ -271,3 +270,61 @@ def process(algorithm: Literal["CGNE", "CGNR"], numInput: int, inputData: bytes)
 
     processResult.endDateTime = datetime.now()
     return processResult
+
+# LÓGICA DE MULTIPROCESSAMENTO (ISOLAMENTO DE MEMÓRIA E BYPASS DO GIL)
+
+# fábrica de processos paralelos (iniciada apenas quando necessário)
+executor_pesado = None
+executor_leve = None
+
+def get_executors():
+    global executor_pesado, executor_leve
+    
+    if executor_pesado is None or executor_leve is None:
+        cpu_cores = os.cpu_count() or 1
+        
+        # lê apenas a memória que está livre no momento 
+        ram_livre_gb = psutil.virtual_memory().available / (1024 ** 3)
+        print(f"RAM Livre exata lida agora: {ram_livre_gb:.2f} GB")
+        
+        # deixa 1 GB de "respiro" pra tudo não travar
+        ram_utilizavel = max(0, ram_livre_gb - 1.0)
+        
+        # calcula os workers com base apenas no que podemos usar com segurança
+        # Fila Pesada (Imagens 60x60): gastam ~3.5GB
+        workers_pesados = max(1, min(cpu_cores, int(ram_utilizavel // 3.5)))
+        
+        # Fila Leve (Imagens 30x30): gastam ~0.5GB
+        workers_leves = max(1, min(cpu_cores, int(ram_utilizavel // 0.5)))
+        
+        print(f"\n==================================================")
+        print(f"[HARDWARE] CPU Cores: {cpu_cores} | RAM Utilizável: {ram_utilizavel:.1f}GB")
+        print(f"[FILA PESADA - 60x60] Capacidade para {workers_pesados} worker(s) simultâneo(s).")
+        print(f"[FILA LEVE - 30x30] Capacidade para {workers_leves} worker(s) simultâneo(s).")
+        print(f"==================================================\n")
+        
+        executor_pesado = ProcessPoolExecutor(max_workers=workers_pesados)
+        executor_leve = ProcessPoolExecutor(max_workers=workers_leves)
+        
+    return executor_pesado, executor_leve
+
+# operário isolado (roda em um processo limpo do SO)
+def worker_isolado(algorithm, numInput, raw_data):
+    # liga o monitor APENAS para este processo (livre de concorrência)
+    tracemalloc.start()
+    cpu_start_time = time.process_time()
+
+    # chama a sua função original de matemática que já existe neste arquivo
+    resultado = process(algorithm, numInput, raw_data)
+
+    cpu_end_time = time.process_time()
+    cpu_time_sec = cpu_end_time - cpu_start_time
+
+    # tira a "foto" da memória consumida no pico e desliga o monitor
+    current_mem, peak_mem = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    
+    ram_mb = peak_mem / (1024 * 1024)
+
+    # devolve o pacote completo (Imagem + Estatísticas Exatas) pro Flask
+    return resultado, cpu_time_sec, ram_mb
